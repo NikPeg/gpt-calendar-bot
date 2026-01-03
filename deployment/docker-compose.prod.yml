@@ -1,0 +1,22 @@
+services:
+  telegram-gpt:
+    image: cr.yandex/${YC_REGISTRY_ID}/telegram-gpt:latest
+    container_name: telegram-gpt
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    volumes:
+      # Монтируем директорию для сохранения базы данных и логов
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_NAME=/data/users.db
+    # Healthcheck
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*main.py' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+

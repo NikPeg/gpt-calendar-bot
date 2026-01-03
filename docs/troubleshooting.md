@@ -1,0 +1,486 @@
+# ❗ Решение проблем
+
+Руководство по диагностике и решению распространенных проблем с ботом.
+
+## 📋 Содержание
+
+- [Бот не отвечает на сообщения](#бот-не-отвечает-на-сообщения)
+- [Ошибки LLM](#ошибки-llm)
+- [Проблемы с базой данных](#проблемы-с-базой-данных)
+- [Бот не останавливается](#бот-не-останавливается)
+- [Проблемы с Docker](#проблемы-с-docker)
+- [Проблемы с подпиской на каналы](#проблемы-с-подпиской-на-каналы)
+- [Логи не пишутся](#логи-не-пишутся)
+- [Ошибки форматирования Markdown](#ошибки-форматирования-markdown)
+
+---
+
+## Бот не отвечает на сообщения
+
+### Симптомы
+- Сообщения боту не получают ответа
+- Команды не работают
+- Бот "онлайн", но молчит
+
+### Диагностика
+
+**1. Проверьте, что бот запущен:**
+
+```bash
+# Локально
+ps aux | grep "python main.py"
+
+# Docker
+docker ps | grep telegram
+```
+
+**2. Проверьте правильность токена:**
+
+```bash
+cat .env | grep TG_TOKEN
+```
+
+**3. Проверьте логи:**
+
+```bash
+# Локально
+tail -50 logs/debug.log
+
+# Docker
+docker logs --tail=50 telegram-gpt
+```
+
+### Решение
+
+**Неправильный токен:**
+```bash
+# Исправьте TG_TOKEN в .env
+nano .env
+
+# Перезапустите бота
+docker-compose -f deployment/docker-compose.yml restart  # или python main.py
+```
+
+**Бот не запущен:**
+```bash
+# Docker
+docker-compose -f deployment/docker-compose.yml up -d
+
+# Локально
+python main.py
+```
+
+**Проблемы с сетью:**
+```bash
+# Проверьте доступность Telegram API
+curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
+```
+
+---
+
+## Ошибки LLM
+
+### Симптомы
+- Бот отвечает, но с ошибкой
+- Timeout при ответе
+- Ошибки вида "Rate limit exceeded" или "Insufficient balance"
+
+### Диагностика
+
+**1. Проверьте баланс на OpenRouter:**
+
+Перейдите на https://openrouter.ai/ и проверьте свой баланс.
+
+**2. Проверьте токен:**
+
+```bash
+cat .env | grep LLM_TOKEN
+```
+
+**3. Проверьте доступность модели:**
+
+```bash
+cat .env | grep MODEL
+
+# Проверьте, что модель существует
+curl https://openrouter.ai/api/v1/models
+```
+
+**4. Проверьте логи:**
+
+```bash
+grep "LLM.*ERROR" logs/debug.log
+```
+
+### Решение
+
+**Недостаточно средств:**
+- Пополните баланс на OpenRouter
+- Переключитесь на бесплатную модель: `google/gemini-2.0-flash-exp:free`
+
+**Неправильная модель:**
+```bash
+# В .env
+MODEL=google/gemini-2.0-flash-exp:free
+
+# Перезапустите бота
+```
+
+**Rate limit:**
+- Подождите некоторое время
+- Используйте другую модель
+- Увеличьте лимиты на OpenRouter
+
+**Timeout:**
+```bash
+# Увеличьте таймаут в config.py (если нужно)
+# Или переключитесь на более быструю модель
+```
+
+---
+
+## Проблемы с базой данных
+
+### Симптомы
+- Ошибки вида "database is locked"
+- "unable to open database file"
+- Потеря данных после перезапуска
+
+### Диагностика
+
+**1. Проверьте права доступа:**
+
+```bash
+ls -la data/users.db
+```
+
+**2. Проверьте целостность БД:**
+
+```bash
+sqlite3 data/users.db "PRAGMA integrity_check;"
+```
+
+**3. Проверьте логи:**
+
+```bash
+grep "database" logs/debug.log
+```
+
+### Решение
+
+**Нет прав доступа:**
+```bash
+chmod 644 data/users.db
+chown $USER:$USER data/users.db
+```
+
+**База повреждена:**
+```bash
+# Создайте бэкап (если возможно)
+cp data/users.db data/users.db.backup
+
+# Попробуйте восстановить
+sqlite3 data/users.db ".recover" | sqlite3 data/users_recovered.db
+
+# Или пересоздайте базу
+rm data/users.db
+python main.py  # БД будет создана заново
+```
+
+**База блокируется (Docker):**
+```bash
+# Убедитесь, что volume правильно смонтирован
+docker-compose -f deployment/docker-compose.yml down
+docker-compose -f deployment/docker-compose.yml up -d
+```
+
+**Потеря данных после перезапуска (Docker):**
+
+Проверьте `deployment/docker-compose.yml`:
+```yaml
+volumes:
+  - ./data:/data  # Должен быть смонтирован
+```
+
+---
+
+## Бот не останавливается
+
+### Симптомы
+- `Ctrl+C` не останавливает бота
+- Процесс "висит"
+- Невозможно перезапустить бота
+
+### Решение
+
+**Локальный запуск:**
+
+```bash
+# Найдите процесс
+ps aux | grep "python.*main.py" | grep -v grep
+
+# Остановите процесс (замените PID на реальный)
+kill -15 <PID>
+
+# Если не помогает, принудительная остановка
+kill -9 <PID>
+```
+
+**Docker:**
+
+```bash
+# Остановите контейнер
+docker-compose -f deployment/docker-compose.yml down
+
+# Принудительная остановка
+docker kill telegram-gpt
+docker rm telegram-gpt
+
+# Перезапуск
+docker-compose -f deployment/docker-compose.yml up -d
+```
+
+---
+
+## Проблемы с Docker
+
+### Контейнер постоянно перезапускается
+
+**Диагностика:**
+
+```bash
+docker ps -a | grep telegram
+```
+
+Если видите `Restarting (1)`, значит приложение падает при запуске.
+
+**Решение:**
+
+```bash
+# Проверьте логи
+docker logs --tail=100 telegram-gpt
+
+# Частые причины:
+# 1. Неправильные токены в .env
+# 2. Отсутствие директорий data/ или logs/
+# 3. Проблемы с правами доступа
+```
+
+### Образ не собирается
+
+**Проблема:** `docker build` или `docker-compose -f deployment/docker-compose.yml build` завершается с ошибкой
+
+**Решение:**
+
+```bash
+# Очистите кэш Docker
+docker system prune -a
+
+# Пересоберите образ
+docker-compose -f deployment/docker-compose.yml build --no-cache
+
+# Проверьте синтаксис Dockerfile
+```
+
+### Контейнер занимает много места
+
+**Решение:**
+
+```bash
+# Удалите старые образы
+docker image prune -a
+
+# Удалите неиспользуемые volumes
+docker volume prune
+
+# Очистите всю систему Docker
+docker system prune -a --volumes
+```
+
+---
+
+## Проблемы с подпиской на каналы
+
+### Бот требует подписку, но пользователь уже подписан
+
+**Причины:**
+- Бот не имеет прав администратора в канале
+- Пользователь подписан через ссылку-приглашение (не публично)
+- Канал указан неправильно в `REQUIRED_CHANNELS`
+
+**Решение:**
+
+```bash
+# 1. Проверьте, что бот добавлен в каналы как администратор
+# 2. Проверьте формат в .env
+REQUIRED_CHANNELS=@channel1,@channel2  # С @ и через запятую без пробелов
+
+# 3. Перезапустите бота
+docker-compose -f deployment/docker-compose.yml restart
+```
+
+### Отключить систему подписки
+
+```bash
+# В .env оставьте пустым
+REQUIRED_CHANNELS=
+
+# Перезапустите бота
+```
+
+---
+
+## Логи не пишутся
+
+### Файловые логи пустые
+
+**Проблема:** `logs/debug.log` пустой или не создается
+
+**Решение:**
+
+```bash
+# Проверьте, что директория существует
+mkdir -p logs
+
+# Проверьте права доступа
+chmod 755 logs
+
+# Проверьте настройки в .env
+FILE_LOG_LEVEL=INFO  # Не DISABLED
+
+# Перезапустите бота
+docker-compose -f deployment/docker-compose.yml restart
+
+# Проверьте инициализацию логгера
+grep "Logger initialized" logs/debug.log
+```
+
+### Логи не приходят в Telegram
+
+**Проблема:** `TELEGRAM_LOG_LEVEL` установлен, но логи не приходят
+
+**Решение:**
+
+```bash
+# 1. Проверьте настройки
+cat .env | grep -E "TELEGRAM_LOG_LEVEL|ADMIN_CHAT"
+
+# TELEGRAM_LOG_LEVEL должен быть НЕ DISABLED
+# ADMIN_CHAT должен быть вашим ID
+
+# 2. Проверьте, что бот не заблокирован в чате
+# Напишите боту /start
+
+# 3. Перезапустите бота
+docker-compose -f deployment/docker-compose.yml restart
+```
+
+---
+
+## Ошибки форматирования Markdown
+
+### Симптомы
+- Ошибки вида "Can't parse entities"
+- Неправильное отображение форматирования
+- Бот не может отправить сообщение
+
+### Причина
+
+Telegram имеет строгие требования к Markdown. Бот использует библиотеку `telegramify-markdown` для автоматического исправления.
+
+### Решение
+
+Проблема должна решаться автоматически. Если нет:
+
+```bash
+# Проверьте, что библиотека установлена
+pip list | grep telegramify-markdown
+
+# Переустановите зависимости
+pip install -r requirements.txt --force-reinstall
+
+# Проверьте логи
+grep "markdown" logs/debug.log
+```
+
+📖 **[Подробнее о решении проблем с Markdown →](smart-markdown-fix.md)**
+
+---
+
+## Дополнительная диагностика
+
+### Включите подробное логирование
+
+Для детальной диагностики:
+
+```bash
+# В .env
+FILE_LOG_LEVEL=DEBUG
+
+# Перезапустите бота
+docker-compose -f deployment/docker-compose.yml restart
+
+# Проверьте логи
+tail -f logs/debug.log
+```
+
+### Проверьте системные ресурсы
+
+```bash
+# Использование диска
+df -h
+
+# Использование памяти
+free -m
+
+# Docker статистика
+docker stats telegram-gpt
+```
+
+### Тестовый запуск
+
+```bash
+# Остановите основного бота
+docker-compose -f deployment/docker-compose.yml down
+
+# Запустите в интерактивном режиме
+docker-compose -f deployment/docker-compose.yml up
+
+# Проверьте вывод в консоль
+# Ctrl+C для остановки
+```
+
+---
+
+## Получение помощи
+
+Если проблема не решена:
+
+1. **Соберите информацию:**
+   ```bash
+   # Версия Python
+   python --version
+   
+   # Версия Docker
+   docker --version
+   
+   # Логи бота
+   tail -100 logs/debug.log > logs_sample.txt
+   
+   # Конфигурация (без токенов!)
+   cat .env | grep -v TOKEN | grep -v ADMIN_CHAT
+   ```
+
+2. **Создайте Issue:**
+   - Опишите проблему
+   - Приложите логи (без токенов!)
+   - Укажите версию бота и ОС
+
+3. **Проверьте документацию:**
+   - [Deployment](deployment.md)
+   - [Logging](logging.md)
+   - [CI/CD](ci-cd.md)
+
+---
+
+**[← Вернуться к README](../README.md)**

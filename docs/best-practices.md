@@ -1,0 +1,366 @@
+# 💡 Рекомендации и Best Practices
+
+Руководство по оптимальной настройке и эксплуатации бота в production окружении.
+
+## 📋 Содержание
+
+- [Мониторинг](#мониторинг)
+- [Резервное копирование](#резервное-копирование)
+- [Производительность](#производительность)
+- [Безопасность](#безопасность)
+- [Логирование](#логирование)
+- [Deployment](#deployment)
+- [Обслуживание](#обслуживание)
+
+---
+
+## Мониторинг
+
+### Мониторинг доступности
+
+Используйте Uptime Kuma или подобные сервисы для мониторинга доступности бота.
+
+**Что мониторить:**
+- Работоспособность контейнера Docker
+- Доступность Telegram API
+- Доступность OpenRouter API
+- Использование ресурсов сервера
+
+**Рекомендуемые инструменты:**
+- [Uptime Kuma](https://github.com/louislam/uptime-kuma) - self-hosted мониторинг
+- [UptimeRobot](https://uptimerobot.com/) - облачный мониторинг
+- [Grafana](https://grafana.com/) + [Prometheus](https://prometheus.io/) - продвинутый мониторинг
+
+### Telegram уведомления
+
+В проекте уже настроены автоматические уведомления о деплое. Рекомендуется также настроить:
+- Уведомления о критических ошибках (через `TELEGRAM_LOG_LEVEL`)
+- Еженедельные отчеты о статистике использования
+- Алерты при превышении лимитов API
+
+---
+
+## Резервное копирование
+
+### Автоматический бэкап базы данных
+
+Настройте регулярные бэкапы через cron:
+
+```bash
+# На сервере добавьте в crontab
+0 3 * * * docker exec telegram-gpt sqlite3 /data/users.db .dump > /opt/telegram-gpt/backups/backup-$(date +\%Y\%m\%d).sql
+```
+
+### Ротация бэкапов
+
+Удаляйте старые бэкапы для экономии места:
+
+```bash
+# Удалять бэкапы старше 30 дней
+0 4 * * * find /opt/telegram-gpt/backups/ -name "backup-*.sql" -mtime +30 -delete
+```
+
+### Хранение бэкапов
+
+**Рекомендации:**
+- ✅ Храните бэкапы на отдельном диске/сервере
+- ✅ Используйте облачное хранилище (S3, Yandex Object Storage)
+- ✅ Шифруйте бэкапы перед загрузкой
+- ✅ Регулярно проверяйте возможность восстановления
+
+**Пример загрузки в Yandex Object Storage:**
+
+```bash
+# Установите s3cmd
+sudo apt-get install s3cmd
+
+# Настройте s3cmd для Yandex Object Storage
+s3cmd --configure
+
+# Загружайте бэкапы
+0 5 * * * s3cmd put /opt/telegram-gpt/backups/backup-$(date +\%Y\%m\%d).sql s3://your-bucket/backups/
+```
+
+---
+
+## Производительность
+
+### Оптимизация контекста
+
+Настройте оптимальный размер контекста:
+
+```env
+# Для быстрых ответов и низкой стоимости
+MAX_CONTEXT=10
+
+# Для хорошего баланса (рекомендуется)
+MAX_CONTEXT=20
+
+# Для максимального контекста
+MAX_CONTEXT=50
+```
+
+**Правило:** Чем больше `MAX_CONTEXT`, тем лучше модель помнит контекст, но тем выше стоимость и время ответа.
+
+### Выбор модели
+
+Используйте оптимальную модель для ваших задач:
+
+**Production (баланс цена/качество):**
+```env
+MODEL=google/gemini-2.0-flash-exp:free
+```
+
+**Лучшее качество (платная):**
+```env
+MODEL=openai/gpt-4o-mini
+```
+
+**Максимальное качество (дорого):**
+```env
+MODEL=anthropic/claude-3.5-sonnet
+```
+
+### Очистка Docker
+
+Регулярно очищайте неиспользуемые Docker образы:
+
+```bash
+# Удалить неиспользуемые образы
+docker image prune -a -f
+
+# Удалить все кроме текущего
+docker images | grep telegram-gpt | grep -v latest | awk '{print $3}' | xargs docker rmi
+```
+
+**Настройте автоматическую очистку:**
+
+```bash
+# Добавьте в crontab
+0 2 * * 0 docker system prune -af --volumes
+```
+
+---
+
+## Безопасность
+
+### Защита токенов
+
+**Обязательно:**
+- ✅ Никогда не коммитьте `.env` файл
+- ✅ Храните токены в секрете
+- ✅ Используйте разные токены для dev/prod
+- ✅ Регулярно ротируйте токены
+
+### Ограничение доступа
+
+```bash
+# Ограничьте доступ к данным
+chmod 700 /opt/telegram-gpt/data
+chmod 600 /opt/telegram-gpt/data/users.db
+
+# Ограничьте доступ к логам
+chmod 700 /opt/telegram-gpt/logs
+```
+
+### Firewall
+
+Настройте firewall на сервере:
+
+```bash
+# Разрешить только SSH и исходящие соединения
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw enable
+```
+
+### Обновления
+
+**Регулярно обновляйте:**
+- Зависимости Python (`pip install -U -r requirements.txt`)
+- Системные пакеты (`apt update && apt upgrade`)
+- Docker (`apt install docker.io`)
+
+---
+
+## Логирование
+
+### Production конфигурация
+
+**Рекомендуемая настройка для production:**
+
+```env
+FILE_LOG_LEVEL=INFO
+TELEGRAM_LOG_LEVEL=ERROR
+```
+
+**Результат:**
+- В файле - все важные события для анализа
+- В Telegram - только ошибки для быстрого реагирования
+
+### Мониторинг логов
+
+**Настройте алерты на ключевые события:**
+
+```bash
+# Проверка критических ошибок каждый час
+0 * * * * grep "CRITICAL\|ERROR" /opt/telegram-gpt/logs/debug.log | tail -10 | mail -s "Bot Errors" admin@example.com
+```
+
+📖 **[Подробнее о логировании →](logging.md)**
+
+---
+
+## Deployment
+
+### Blue-Green Deployment
+
+Для zero-downtime деплоя настройте два контейнера:
+
+```bash
+# Запустите второй контейнер
+docker run -d --name telegram-gpt-green \
+  --restart unless-stopped \
+  --env-file .env \
+  -v /opt/telegram-gpt/data:/data \
+  cr.yandex/your-registry/telegram-gpt:latest
+
+# После проверки переключитесь
+docker stop telegram-gpt-blue
+docker rm telegram-gpt-blue
+docker rename telegram-gpt-green telegram-gpt-blue
+```
+
+### Staging окружение
+
+Рекомендуется создать отдельное staging окружение для тестирования:
+
+```bash
+# Staging токены
+TG_TOKEN_STAGING=...
+LLM_TOKEN_STAGING=...
+
+# Staging сервер
+staging.example.com
+```
+
+### Canary Releases
+
+Постепенный деплой для части пользователей:
+
+1. Разделите пользователей на группы
+2. Деплойте обновление для 10% пользователей
+3. Мониторьте метрики 24 часа
+4. Если OK - деплойте для всех
+
+📖 **[Подробнее о CI/CD →](ci-cd.md)**
+
+---
+
+## Обслуживание
+
+### Регулярные задачи
+
+**Ежедневно:**
+- Проверка логов на ошибки
+- Мониторинг использования ресурсов
+
+**Еженедельно:**
+- Анализ статистики использования
+- Проверка бэкапов
+- Очистка старых Docker образов
+
+**Ежемесячно:**
+- Обновление зависимостей
+- Обновление системных пакетов
+- Проверка безопасности
+- Аудит логов
+
+### Полезные команды
+
+**Локальное тестирование образа:**
+
+```bash
+# Соберите локально
+docker build -t telegram-gpt:test .
+
+# Запустите локально
+docker run --env-file .env telegram-gpt:test
+```
+
+**Просмотр размера образов:**
+
+```bash
+docker images telegram-gpt --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+```
+
+**Проверка использования ресурсов:**
+
+```bash
+# Использование диска
+df -h
+
+# Использование памяти
+free -m
+
+# Docker статистика
+docker stats telegram-gpt --no-stream
+```
+
+### Checklist перед обновлением
+
+- [ ] Создан бэкап базы данных
+- [ ] Проверены логи на ошибки
+- [ ] Обновление протестировано локально
+- [ ] Уведомлены пользователи (если breaking changes)
+- [ ] Есть план отката
+
+---
+
+## Масштабирование
+
+### Когда нужно масштабировать
+
+Рассмотрите масштабирование если:
+- Более 1000 активных пользователей
+- Более 100 сообщений в минуту
+- Время ответа > 5 секунд
+- Использование CPU > 80%
+- Использование RAM > 80%
+
+### Вертикальное масштабирование
+
+Увеличьте ресурсы сервера:
+
+```bash
+# Yandex Cloud
+yc compute instance update telegram-gpt-server \
+  --memory 4GB \
+  --cores 4
+```
+
+### Горизонтальное масштабирование
+
+Для очень высокой нагрузки:
+- Используйте очередь сообщений (RabbitMQ, Redis)
+- Разделите обработку по нескольким инстансам
+- Используйте балансировщик нагрузки
+- Мигрируйте на PostgreSQL для лучшей производительности БД
+
+---
+
+## Полезные ссылки
+
+- [Документация Docker](https://docs.docker.com/)
+- [Документация Docker Compose](https://docs.docker.com/compose/)
+- [Документация aiogram](https://docs.aiogram.dev/)
+- [OpenRouter API](https://openrouter.ai/docs)
+- [Telegram Bot API](https://core.telegram.org/bots/api)
+- [GitHub Actions](https://docs.github.com/en/actions)
+- [Yandex Cloud](https://cloud.yandex.ru/docs)
+
+---
+
+**[← Вернуться к README](../README.md)**
+

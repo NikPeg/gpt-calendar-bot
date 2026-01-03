@@ -1,0 +1,49 @@
+# Ruff configuration
+# https://docs.astral.sh/ruff/configuration/
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+# Python version
+target-version = "py313"
+
+# Line length
+line-length = 88
+
+[lint]
+# Enable rules
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "PIE", # flake8-pie
+    "RET", # flake8-return
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "W293",  # blank line contains whitespace
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]  # imported but unused
+
+[format]
+# Enable auto-formatting
+quote-style = "double"
+indent-style = "space"
+

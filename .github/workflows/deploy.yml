@@ -1,0 +1,526 @@
+name: Deploy to Yandex Cloud
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: cr.yandex
+  IMAGE_NAME: telegram-gpt
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/requirements.txt
+          pip install -r requirements/requirements-dev.txt
+
+      - name: Run linter
+        run: ruff check .
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Validate JSON configs
+        run: |
+          python -c "import json; json.load(open('config/messages.json'))"
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Yandex Container Registry
+        run: |
+          # Сохраняем JSON ключ во временный файл
+          echo '${{ secrets.YC_SA_JSON_CREDENTIALS }}' > /tmp/key.json
+
+          # Логинимся используя docker и yc CLI
+          cat /tmp/key.json | docker login \
+            --username json_key \
+            --password-stdin \
+            cr.yandex/${{ secrets.YC_REGISTRY_ID }}
+
+          # Удаляем временный файл
+          rm /tmp/key.json
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}"
+
+          # Собираем образ из deployment директории
+          docker build -f deployment/Dockerfile -t ${IMAGE_TAG}:latest -t ${IMAGE_TAG}:${{ github.sha }} .
+
+          # Пушим оба тега
+          docker push ${IMAGE_TAG}:latest
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+
+  deploy:
+    name: Deploy to Server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Copy docker-compose.prod.yml to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.YC_INSTANCE_IP }}
+          username: ${{ secrets.YC_INSTANCE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deployment/docker-compose.prod.yml"
+          target: "~/telegram-gpt/"
+          strip_components: 1
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          LLM_TOKEN: ${{ secrets.LLM_TOKEN }}
+          ADMIN_CHAT: ${{ secrets.ADMIN_CHAT }}
+          MODEL: ${{ secrets.MODEL || 'google/gemini-2.0-flash-exp:free' }}
+          MAX_CONTEXT: ${{ secrets.MAX_CONTEXT || '20' }}
+          MAX_STORAGE: ${{ secrets.MAX_STORAGE || '100' }}
+          FEEDBACK_FORM_URL: ${{ secrets.FEEDBACK_FORM_URL || '' }}
+          REQUIRED_CHANNELS: ${{ secrets.REQUIRED_CHANNELS || '' }}
+          FILE_LOG_LEVEL: ${{ secrets.FILE_LOG_LEVEL || 'INFO' }}
+          TELEGRAM_LOG_LEVEL: ${{ secrets.TELEGRAM_LOG_LEVEL || 'DISABLED' }}
+          YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+          NEW_IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:latest
+          BACKUP_IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:stable
+        with:
+          host: ${{ secrets.YC_INSTANCE_IP }}
+          username: ${{ secrets.YC_INSTANCE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: TG_TOKEN,LLM_TOKEN,ADMIN_CHAT,MODEL,MAX_CONTEXT,MAX_STORAGE,FEEDBACK_FORM_URL,REQUIRED_CHANNELS,FILE_LOG_LEVEL,TELEGRAM_LOG_LEVEL,YC_REGISTRY_ID,NEW_IMAGE,BACKUP_IMAGE
+          script: |
+            set -e  # Остановка при ошибке
+
+            echo "🔄 Начинаем деплой..."
+
+            # Создаем директории если их нет
+            export DEPLOY_DIR="$HOME/telegram-gpt"
+            mkdir -p "$DEPLOY_DIR/data" "$DEPLOY_DIR/logs"
+            echo "📁 Директория деплоя: $DEPLOY_DIR"
+
+            # Сохраняем информацию о текущем работающем контейнере
+            CURRENT_IMAGE=""
+            if docker ps --filter name=telegram-gpt --format "{{.Image}}" | grep -q .; then
+              CURRENT_IMAGE=$(docker ps --filter name=telegram-gpt --format "{{.Image}}")
+              echo "📸 Текущий образ: $CURRENT_IMAGE"
+
+              # Тегируем текущий образ как stable (резервная копия)
+              docker tag "$CURRENT_IMAGE" "$BACKUP_IMAGE" || echo "⚠️  Не удалось создать backup тег"
+            else
+              echo "⚠️  Текущий контейнер не найден"
+            fi
+
+            # Обновляем новый образ
+            echo "⬇️  Скачиваем новый образ..."
+            docker pull "$NEW_IMAGE"
+
+            # Останавливаем и удаляем текущий контейнер
+            echo "⏸️  Останавливаем текущий контейнер..."
+            
+            # Получаем ID всех контейнеров с именем telegram-gpt (включая остановленные)
+            CONTAINER_IDS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}" || true)
+            
+            if [ -n "$CONTAINER_IDS" ]; then
+              echo "🗑️  Найдены контейнеры для удаления: $CONTAINER_IDS"
+              for CONTAINER_ID in $CONTAINER_IDS; do
+                echo "  Отключаем автоперезапуск для $CONTAINER_ID..."
+                docker update --restart=no "$CONTAINER_ID" 2>/dev/null || true
+                
+                # Получаем PID процесса контейнера
+                CONTAINER_PID=$(docker inspect "$CONTAINER_ID" --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                
+                if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                  echo "  Убиваем процесс контейнера $CONTAINER_ID (PID: $CONTAINER_PID)..."
+                  sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                  sleep 1
+                else
+                  echo "  Процесс контейнера $CONTAINER_ID не найден или уже остановлен"
+                fi
+                
+                echo "  Удаляем контейнер $CONTAINER_ID..."
+                docker rm -f "$CONTAINER_ID" 2>/dev/null || true
+              done
+              sleep 2
+            fi
+            
+            # Финальная проверка
+            if docker ps -a --filter name=telegram-gpt --format "{{.Names}}" | grep -q telegram-gpt; then
+              echo "⚠️  Контейнер все еще существует, применяем экстренные меры..."
+              
+              # Последняя попытка - убить все процессы и принудительно удалить
+              REMAINING_IDS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}")
+              for CONTAINER_ID in $REMAINING_IDS; do
+                CONTAINER_PID=$(docker inspect "$CONTAINER_ID" --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                  echo "  Экстренно убиваем PID: $CONTAINER_PID..."
+                  sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                fi
+                sleep 1
+                docker rm -f "$CONTAINER_ID" 2>/dev/null || true
+              done
+              sleep 2
+              
+              # Финальная-финальная проверка
+              if docker ps -a --filter name=telegram-gpt --format "{{.Names}}" | grep -q telegram-gpt; then
+                echo "❌ ОШИБКА: Контейнер все еще существует после всех попыток!"
+                docker ps -a --filter name=telegram-gpt
+                exit 1
+              fi
+            fi
+            
+            echo "✅ Все старые контейнеры удалены"
+
+            # Функция для запуска контейнера через docker-compose
+            start_container() {
+              echo "🚀 Запускаем контейнер через docker-compose..."
+              
+              # Убеждаемся что старый контейнер полностью убит
+              OLD_CONTAINERS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}" || true)
+              if [ -n "$OLD_CONTAINERS" ]; then
+                echo "⚠️  Найдены остатки старых контейнеров, удаляем..."
+                for CID in $OLD_CONTAINERS; do
+                  # Убиваем процесс
+                  OLD_PID=$(docker inspect "$CID" --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                  if [ -n "$OLD_PID" ] && [ "$OLD_PID" != "0" ]; then
+                    echo "  Убиваем PID: $OLD_PID"
+                    sudo kill -9 "$OLD_PID" 2>/dev/null || true
+                  fi
+                  sleep 1
+                  # Удаляем контейнер
+                  docker rm -f "$CID" 2>/dev/null || true
+                done
+                sleep 2
+              fi
+              
+              # Создаем .env файл со всеми переменными окружения
+              echo "📝 Создаем .env файл..."
+              {
+                echo "TG_TOKEN=$TG_TOKEN"
+                echo "LLM_TOKEN=$LLM_TOKEN"
+                echo "ADMIN_CHAT=$ADMIN_CHAT"
+                echo "MODEL=$MODEL"
+                echo "MAX_CONTEXT=$MAX_CONTEXT"
+                echo "MAX_STORAGE=$MAX_STORAGE"
+                echo "REQUIRED_CHANNELS=$REQUIRED_CHANNELS"
+                echo "FILE_LOG_LEVEL=$FILE_LOG_LEVEL"
+                echo "TELEGRAM_LOG_LEVEL=$TELEGRAM_LOG_LEVEL"
+                echo "YC_REGISTRY_ID=$YC_REGISTRY_ID"
+              } > "$DEPLOY_DIR/.env"
+              
+              # Запускаем через docker-compose
+              cd "$DEPLOY_DIR"
+              sudo docker-compose -f docker-compose.prod.yml up -d
+            }
+
+            # Запускаем новый контейнер
+            echo "📦 Используем образ: $NEW_IMAGE"
+            if start_container; then
+              echo "✅ Контейнер запущен"
+            else
+              echo "❌ Ошибка запуска контейнера"
+              exit 1
+            fi
+
+            # Ждем пока контейнер станет healthy (максимум 60 секунд)
+            echo "⏳ Ожидаем запуска и проверки healthcheck (до 60 секунд)..."
+            HEALTH_CHECK_TIMEOUT=60
+            HEALTH_CHECK_INTERVAL=5
+            ELAPSED=0
+            
+            while [ $ELAPSED -lt $HEALTH_CHECK_TIMEOUT ]; do
+              HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-gpt 2>/dev/null || echo "none")
+              
+              if [ "$HEALTH_STATUS" = "healthy" ]; then
+                echo "✅ Контейнер здоров (healthy)"
+                break
+              elif [ "$HEALTH_STATUS" = "none" ]; then
+                # Контейнер без healthcheck или не запущен
+                if docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt; then
+                  echo "ℹ️  Контейнер работает (healthcheck не настроен)"
+                  break
+                else
+                  echo "❌ Контейнер не запущен"
+                  break
+                fi
+              else
+                echo "⏳ Статус: $HEALTH_STATUS (прошло ${ELAPSED}с)"
+                sleep $HEALTH_CHECK_INTERVAL
+                ELAPSED=$((ELAPSED + HEALTH_CHECK_INTERVAL))
+              fi
+            done
+            
+            # Финальная проверка статуса
+            FINAL_HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-gpt 2>/dev/null || echo "none")
+            CONTAINER_RUNNING=$(docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt && echo "yes" || echo "no")
+            
+            if [ "$FINAL_HEALTH_STATUS" != "healthy" ] && [ "$FINAL_HEALTH_STATUS" != "none" ]; then
+              echo "❌ Контейнер не прошел healthcheck за ${HEALTH_CHECK_TIMEOUT} секунд!"
+              echo "Финальный статус: $FINAL_HEALTH_STATUS"
+              docker logs telegram-gpt --tail=50
+              
+              # Откатываемся к стабильной версии
+              if [ -n "$CURRENT_IMAGE" ]; then
+                echo "🔙 Откатываемся к предыдущей версии из-за проблем с healthcheck"
+                
+                # Получаем PID процесса и убиваем его
+                CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                  sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                  sleep 1
+                fi
+                
+                docker stop telegram-gpt 2>/dev/null || true
+                docker rm -f telegram-gpt 2>/dev/null || true
+                
+                # Перетегируем backup образ как latest для docker-compose
+                echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
+                docker tag "$BACKUP_IMAGE" "$NEW_IMAGE" || echo "⚠️ Не удалось перетегировать"
+                
+                start_container
+                sleep 10
+                echo "🔄 Откат выполнен. Проверьте логи:"
+                docker logs telegram-gpt --tail=30
+                exit 1
+              else
+                echo "⚠️  Нет предыдущей версии для отката!"
+                exit 1
+              fi
+            fi
+            
+            if [ "$CONTAINER_RUNNING" = "yes" ]; then
+              echo "✅ Контейнер работает"
+
+              # Проверяем успешность миграций (или их отсутствие)
+              LOGS=$(docker logs telegram-gpt 2>&1 | tail -100)
+
+              # Миграции считаются успешными если:
+              # 1. Все миграции применены успешно
+              # 2. Миграций не найдено (нечего применять)
+              # Миграции считаются провалившимися если есть ошибка при их применении
+              if echo "$LOGS" | grep -q "❌.*миграци\|Ошибка при применении миграции"; then
+                echo "❌ Миграции не были применены успешно!"
+                echo "$LOGS" | grep -A 5 "миграц"
+                
+                # Откатываемся к стабильной версии
+                if [ -n "$CURRENT_IMAGE" ]; then
+                  echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
+                  
+                  # Получаем PID процесса и убиваем его
+                  CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                  if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                    sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                    sleep 1
+                  fi
+                  
+                  docker stop telegram-gpt 2>/dev/null || true
+                  docker rm -f telegram-gpt 2>/dev/null || true
+                  
+                  # Перетегируем backup образ как latest для docker-compose
+                  echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
+                  docker tag "$BACKUP_IMAGE" "$NEW_IMAGE" || echo "⚠️ Не удалось перетегировать"
+                  
+                  start_container
+                  sleep 10
+                  echo "🔄 Откат выполнен. Проверьте логи:"
+                  docker logs telegram-gpt --tail=30
+                  exit 1
+                else
+                  echo "⚠️  Нет предыдущей версии для отката!"
+                  docker logs telegram-gpt --tail=50
+                  exit 1
+                fi
+              else
+                echo "✅ Миграции успешны (применены или отсутствуют)"
+              fi
+
+              # Проверяем логи на наличие критических ошибок запуска
+              if echo "$LOGS" | grep -iE "CRITICAL|ERROR.*Failed to|Exception.*startup"; then
+                echo "❌ Обнаружены критические ошибки в логах!"
+                
+                # Откатываемся к стабильной версии
+                if [ -n "$CURRENT_IMAGE" ]; then
+                  echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
+                  
+                  # Получаем PID процесса и убиваем его
+                  CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                  if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                    sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                    sleep 1
+                  fi
+                  
+                  docker stop telegram-gpt 2>/dev/null || true
+                  docker rm -f telegram-gpt 2>/dev/null || true
+                  
+                  # Перетегируем backup образ как latest для docker-compose
+                  echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
+                  docker tag "$BACKUP_IMAGE" "$NEW_IMAGE" || echo "⚠️ Не удалось перетегировать"
+                  
+                  start_container
+                  sleep 10
+                  echo "🔄 Откат выполнен. Проверьте логи:"
+                  docker logs telegram-gpt --tail=30
+                  exit 1
+                else
+                  echo "⚠️  Нет предыдущей версии для отката!"
+                  docker logs telegram-gpt --tail=50
+                  exit 1
+                fi
+              else
+                echo "✅ Деплой успешен!"
+                docker logs telegram-gpt --tail=30
+                echo "📊 Статус контейнера:"
+                docker ps --filter name=telegram-gpt
+              fi
+            else
+              echo "❌ Контейнер не работает!"
+              
+              # Откатываемся к стабильной версии
+              if [ -n "$CURRENT_IMAGE" ]; then
+                echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
+                
+                # Получаем PID процесса и убиваем его
+                CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
+                  sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
+                  sleep 1
+                fi
+                
+                docker stop telegram-gpt 2>/dev/null || true
+                docker rm -f telegram-gpt 2>/dev/null || true
+                
+                # Перетегируем backup образ как latest для docker-compose
+                echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
+                docker tag "$BACKUP_IMAGE" "$NEW_IMAGE" || echo "⚠️ Не удалось перетегировать"
+                
+                start_container
+                sleep 10
+                echo "🔄 Откат выполнен"
+                docker logs telegram-gpt --tail=30
+              else
+              echo "⚠️  Нет предыдущей версии для отката!"
+              docker logs telegram-gpt --tail=50
+              fi
+              exit 1
+            fi
+
+      - name: Final verification
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.YC_INSTANCE_IP }}
+          username: ${{ secrets.YC_INSTANCE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🔍 Финальная проверка..."
+
+            if docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt; then
+              echo "✅ Бот работает"
+              echo ""
+              echo "📊 Информация о контейнере:"
+              docker ps --filter name=telegram-gpt --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+              echo ""
+              echo "📝 Последние логи:"
+              docker logs telegram-gpt --tail=20
+            else
+              echo "❌ ВНИМАНИЕ: Бот не работает!"
+              echo ""
+              echo "📝 Последние логи:"
+              docker logs telegram-gpt --tail=50 2>&1 || echo "Логи недоступны"
+              exit 1
+            fi
+
+  notify:
+    name: Send Telegram Notification
+    needs: [test, build-and-push, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Send notification
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          COMMIT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Определяем статусы каждого job
+          TEST_STATUS="${{ needs.test.result }}"
+          BUILD_STATUS="${{ needs.build-and-push.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
+          
+          # Функция для форматирования статуса
+          format_status() {
+            local status=$1
+            local name=$2
+            case "$status" in
+              "success")
+                echo "✅ <b>${name}:</b> успешно"
+                ;;
+              "failure")
+                echo "❌ <b>${name}:</b> ошибка"
+                ;;
+              "cancelled")
+                echo "⚠️ <b>${name}:</b> отменен"
+                ;;
+              "skipped")
+                echo "⏭️ <b>${name}:</b> пропущен"
+                ;;
+              *)
+                echo "❓ <b>${name}:</b> ${status:-неизвестно}"
+                ;;
+            esac
+          }
+          
+          # Формируем сообщение
+          # Проверяем, все ли jobs успешны (учитываем, что skipped/null не считается успехом)
+          ALL_SUCCESS=true
+          if [ "$TEST_STATUS" != "success" ] || [ -z "$TEST_STATUS" ]; then
+            ALL_SUCCESS=false
+          fi
+          if [ "$BUILD_STATUS" != "success" ] || [ -z "$BUILD_STATUS" ]; then
+            ALL_SUCCESS=false
+          fi
+          if [ "$DEPLOY_STATUS" != "success" ] || [ -z "$DEPLOY_STATUS" ]; then
+            ALL_SUCCESS=false
+          fi
+          
+          if [ "$ALL_SUCCESS" = "true" ]; then
+            EMOJI="✅"
+            TITLE="<b>Деплой успешно завершен!</b>"
+            STATUS_TEXT="Все этапы пройдены успешно"
+          else
+            EMOJI="❌"
+            TITLE="<b>Деплой завершился с ошибкой!</b>"
+            STATUS_TEXT=""
+            
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${TEST_STATUS:-skipped}" "Тесты/Линтер")%0A"
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${BUILD_STATUS:-skipped}" "Сборка")%0A"
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${DEPLOY_STATUS:-skipped}" "Деплой")%0A"
+          fi
+          
+          MESSAGE="${EMOJI} ${TITLE}%0A%0ACommit: <code>${COMMIT_SHA}</code>%0A${COMMIT_MSG}%0A%0A${STATUS_TEXT}%0A<a href='${WORKFLOW_URL}'>Проверить в Actions</a>"
+          
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TG_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.ADMIN_CHAT }}" \
+            -d "parse_mode=HTML" \
+            -d "text=${MESSAGE}"
+

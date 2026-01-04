@@ -256,8 +256,9 @@ async def execute_calendar_function(
                 return "❌ Не указано название события"
 
             description = arguments.get("description")
-            start_datetime = parse_datetime(arguments.get("start_datetime"))
-            end_datetime = parse_datetime(arguments.get("end_datetime"))
+            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+            start_datetime = parse_datetime(arguments.get("start_datetime"), user_timezone_offset)
+            end_datetime = parse_datetime(arguments.get("end_datetime"), user_timezone_offset)
             location = arguments.get("location")
 
             # Если время не указано, используем текущее время

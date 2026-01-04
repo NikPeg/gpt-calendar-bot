@@ -3,10 +3,9 @@
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -221,7 +220,7 @@ class CalendarService:
                 params["timeMin"] = time_min
             else:
                 # По умолчанию показываем события с текущего момента
-                now = datetime.now(timezone.utc).isoformat()
+                now = datetime.now(UTC).isoformat()
                 params["timeMin"] = now
 
             if time_max:
@@ -231,9 +230,7 @@ class CalendarService:
             events_result = (
                 self.service.events().list(**params).execute()
             )
-            events = events_result.get("items", [])
-
-            return events
+            return events_result.get("items", [])
         except HttpError as e:
             logger.error(f"Error listing events: {e}")
             return []
@@ -262,13 +259,11 @@ class CalendarService:
             if not calendar_id:
                 return None
 
-            event = (
+            return (
                 self.service.events()
                 .get(calendarId=calendar_id, eventId=event_id)
                 .execute()
             )
-
-            return event
         except HttpError as e:
             logger.error(f"Error getting event: {e}")
             return None

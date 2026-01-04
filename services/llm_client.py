@@ -81,9 +81,8 @@ async def send_request_to_openrouter(
                 )
 
                 if "choices" in response_json and len(response_json["choices"]) > 0:
-                    message = response_json["choices"][0]["message"]
                     # Возвращаем полный объект сообщения для обработки function calling
-                    return message
+                    return response_json["choices"][0]["message"]
 
                 logger.error(f"No choices in LLM response. Response: {response_json}")
                 return None

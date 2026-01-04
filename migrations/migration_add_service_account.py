@@ -2,7 +2,6 @@
 Миграция: добавление поля service_account_json в таблицу conversations.
 """
 
-import asyncio
 import os
 
 import aiosqlite
@@ -35,6 +34,5 @@ async def upgrade():
             )
             await db.commit()
             return "Поле service_account_json добавлено в таблицу conversations"
-        else:
-            return "Поле service_account_json уже существует"
+        return "Поле service_account_json уже существует"
 

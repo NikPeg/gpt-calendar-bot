@@ -4,8 +4,11 @@
 
 from aiogram import F, types
 from aiogram.filters.command import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 
 from core.bot_instance import bot, dp
 from core.config import ADMIN_CHAT, MESSAGES, REQUIRED_CHANNELS, logger
@@ -165,10 +168,9 @@ async def cmd_start(message: types.Message):
         )
 
     # Проверяем статус подписки, если есть обязательные каналы
-    if REQUIRED_CHANNELS and user_id != ADMIN_CHAT:
+    if REQUIRED_CHANNELS and user_id != ADMIN_CHAT and conversation.subscription_verified != 1:
         # Если пользователь не подписан (0) или подписка не проверялась (None), показываем сообщение
-        if conversation.subscription_verified != 1:
-            await send_subscription_request(user_id)
+        await send_subscription_request(user_id)
 
     # Не пересылаем сообщения из админ-чата в админ-чат
     if user_id != ADMIN_CHAT:

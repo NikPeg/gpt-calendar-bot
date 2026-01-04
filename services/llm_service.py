@@ -10,8 +10,6 @@ from datetime import datetime, timedelta, timezone
 import cv2
 import telegramify_markdown
 
-import json
-
 from core.config import (
     FULL_LEVEL,
     SYSTEM_PROMPT,
@@ -85,7 +83,7 @@ async def get_llm_response(
         system_content = system_content.replace("{USERNAME}", username_info)
     else:
         system_content = system_content.replace("{USERNAME}", "")
-    
+
     # Добавляем информацию о календаре, если он настроен
     if conversation.service_account_json:
         calendar_info = (
@@ -186,33 +184,33 @@ async def _process_llm_response(
                 function_results.append({
                     "role": "tool",
                     "tool_call_id": tool_call.get("id"),
-                    "content": f"Ошибка: неверный формат аргументов функции",
+                    "content": "Ошибка: неверный формат аргументов функции",
                 })
                 continue
-            
+
             logger.info(f"LLM{chat_id}: Calling function {function_name} with args: {function_args}")
-            
+
             # Выполняем функцию
             result = await execute_calendar_function(
                 function_name, function_args, chat_id
             )
-            
+
             function_results.append({
                 "role": "tool",
                 "tool_call_id": tool_call.get("id"),
                 "content": result,
             })
-        
+
         # Добавляем результаты функций в промпт и запрашиваем финальный ответ
         prompt.append(response)  # Добавляем сообщение с tool_calls
         prompt.extend(function_results)  # Добавляем результаты функций
-        
+
         # Запрашиваем финальный ответ от LLM
         try:
             final_response = await send_request_to_openrouter(
                 prompt, functions=functions, function_call="none"  # Не вызываем функции снова
             )
-            
+
             if final_response and isinstance(final_response, dict):
                 content = final_response.get("content")
                 if content:
@@ -222,12 +220,12 @@ async def _process_llm_response(
             # Возвращаем результаты функций напрямую
             if function_results:
                 return "\n\n".join([r["content"] for r in function_results])
-    
+
     # Обычный текстовый ответ
     content = response.get("content")
     if content:
         return content
-    
+
     return None
 
 
@@ -480,7 +478,7 @@ async def process_user_video(
             system_content = system_content.replace("{USERNAME}", username_info)
         else:
             system_content = system_content.replace("{USERNAME}", "")
-        
+
         # Добавляем информацию о календаре, если он настроен
         if conversation.service_account_json:
             calendar_info = (

@@ -18,5 +18,5 @@ python -m migrations.migration_manager
 
 ## 📖 Документация
 
-Полная документация: [docs/migrations.md](../docs/migrations.md)
+Миграции применяются автоматически при запуске бота. Для создания новой миграции создайте файл `migration_XXX_description.py` в этой папке.
 

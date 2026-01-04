@@ -19,6 +19,15 @@ async def upgrade():
     async with aiosqlite.connect(DATABASE_NAME) as db:
         cursor = await db.cursor()
         
+        # Проверяем, существует ли таблица
+        await cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'"
+        )
+        table_exists = await cursor.fetchone()
+        
+        if not table_exists:
+            return "Таблица conversations не существует, миграция пропущена"
+        
         # Проверяем, существует ли уже поле
         await cursor.execute("PRAGMA table_info(conversations)")
         columns = await cursor.fetchall()

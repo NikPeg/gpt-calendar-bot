@@ -453,7 +453,7 @@ class UserCalendar:
             cursor = await db.cursor()
             await cursor.execute(
                 """
-                INSERT INTO user_calendars 
+                INSERT INTO user_calendars
                 (user_id, calendar_id, calendar_name, calendar_type, is_readonly, is_enabled, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -519,7 +519,7 @@ class UserCalendar:
 
             if enabled_only:
                 sql = """
-                    SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                    SELECT id, user_id, calendar_id, calendar_name, calendar_type,
                            is_readonly, is_enabled, created_at
                     FROM user_calendars
                     WHERE user_id = ? AND is_enabled = 1
@@ -527,7 +527,7 @@ class UserCalendar:
                 """
             else:
                 sql = """
-                    SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                    SELECT id, user_id, calendar_id, calendar_name, calendar_type,
                            is_readonly, is_enabled, created_at
                     FROM user_calendars
                     WHERE user_id = ?
@@ -567,7 +567,7 @@ class UserCalendar:
             cursor = await db.cursor()
             await cursor.execute(
                 """
-                SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                SELECT id, user_id, calendar_id, calendar_name, calendar_type,
                        is_readonly, is_enabled, created_at
                 FROM user_calendars
                 WHERE user_id = ? AND calendar_type = ? AND is_enabled = 1

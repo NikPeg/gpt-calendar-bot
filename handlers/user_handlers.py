@@ -111,27 +111,20 @@ async def registration(message: types.Message):
     )
     await conversation.save_for_db()
 
-    # Проверяем, настроен ли календарь
-    if not conversation.service_account_json:
-        # Календарь не настроен - показываем инструкцию
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="Настроить календарь", callback_data="setup_calendar"
-                    )
-                ],
-            ]
-        )
-        sent_msg = await message.answer(
-            MESSAGES["msg_start"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
-            reply_markup=keyboard,
-        )
-    else:
-        # Календарь настроен - просто приветствие
-        sent_msg = await message.answer(
-            MESSAGES["msg_start"], reply_markup=ReplyKeyboardRemove()
-        )
+    # Проверяем, настроен ли календарь (для новых пользователей всегда не настроен)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Настроить календарь", callback_data="setup_calendar"
+                )
+            ],
+        ]
+    )
+    sent_msg = await message.answer(
+        MESSAGES["msg_start_not_configured"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+        reply_markup=keyboard,
+    )
 
     # Если есть обязательные каналы, показываем сообщение о подписке
     if REQUIRED_CHANNELS and message.chat.id != ADMIN_CHAT:
@@ -156,8 +149,8 @@ async def cmd_start(message: types.Message):
     await conversation.get_from_db()
 
     # Проверяем, настроен ли календарь
-    if not conversation.service_account_json:
-        # Календарь не настроен - показываем инструкцию
+    if not conversation.service_account_json or not conversation.user_email:
+        # Календарь не настроен - показываем инструкцию по настройке
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -168,13 +161,13 @@ async def cmd_start(message: types.Message):
             ]
         )
         sent_msg = await message.answer(
-            MESSAGES["msg_start"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+            MESSAGES["msg_start_not_configured"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
             reply_markup=keyboard,
         )
     else:
-        # Календарь настроен - просто приветствие
+        # Календарь уже настроен - показываем приветствие для настроенного пользователя
         sent_msg = await message.answer(
-            MESSAGES["msg_start"], reply_markup=ReplyKeyboardRemove()
+            MESSAGES["msg_start_configured"], reply_markup=ReplyKeyboardRemove()
         )
 
     # Проверяем статус подписки, если есть обязательные каналы

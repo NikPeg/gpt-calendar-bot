@@ -63,14 +63,14 @@ async def upgrade():
         # Создаем индексы для быстрого поиска
         await cursor.execute(
             """
-            CREATE INDEX idx_user_calendars_user_id 
+            CREATE INDEX idx_user_calendars_user_id
             ON user_calendars(user_id)
             """
         )
 
         await cursor.execute(
             """
-            CREATE INDEX idx_user_calendars_enabled 
+            CREATE INDEX idx_user_calendars_enabled
             ON user_calendars(user_id, is_enabled)
             """
         )
@@ -80,8 +80,8 @@ async def upgrade():
         # Мигрируем данные: добавляем основные календари и праздники существующих пользователей
         await cursor.execute(
             """
-            SELECT id, user_email, service_account_json 
-            FROM conversations 
+            SELECT id, user_email, service_account_json
+            FROM conversations
             WHERE service_account_json IS NOT NULL
             """
         )
@@ -99,7 +99,7 @@ async def upgrade():
                 # Добавляем основной календарь пользователя
                 await cursor.execute(
                     """
-                    INSERT INTO user_calendars 
+                    INSERT INTO user_calendars
                     (user_id, calendar_id, calendar_name, calendar_type, is_readonly, is_enabled, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -118,7 +118,7 @@ async def upgrade():
                 # Добавляем календарь праздников России (публичный, read-only)
                 await cursor.execute(
                     """
-                    INSERT INTO user_calendars 
+                    INSERT INTO user_calendars
                     (user_id, calendar_id, calendar_name, calendar_type, is_readonly, is_enabled, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,

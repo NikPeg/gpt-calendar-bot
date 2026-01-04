@@ -16,5 +16,3 @@ class AdminDispatchAll(StatesGroup):
     """Состояния для массовой рассылки всем пользователям."""
 
     input_text = State()
-
-

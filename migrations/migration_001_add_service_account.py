@@ -18,21 +18,21 @@ async def upgrade():
     """
     async with aiosqlite.connect(DATABASE_NAME) as db:
         cursor = await db.cursor()
-        
+
         # Проверяем, существует ли таблица
         await cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'"
         )
         table_exists = await cursor.fetchone()
-        
+
         if not table_exists:
             return "Таблица conversations не существует, миграция пропущена"
-        
+
         # Проверяем, существует ли уже поле
         await cursor.execute("PRAGMA table_info(conversations)")
         columns = await cursor.fetchall()
         column_names = [col[1] for col in columns]
-        
+
         if "service_account_json" not in column_names:
             # Добавляем поле service_account_json
             await cursor.execute(
@@ -44,4 +44,3 @@ async def upgrade():
             await db.commit()
             return "Поле service_account_json добавлено в таблицу conversations"
         return "Поле service_account_json уже существует"
-

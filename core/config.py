@@ -35,7 +35,7 @@ LLM_TOKEN = os.environ.get("LLM_TOKEN")
 VISION_MODEL = os.environ.get("VISION_MODEL", "google/gemini-2.0-flash-001")
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT",
-    "Ты - полезный AI-ассистент.\n\nКонтекст диалога:\n- Текущая дата и время: {CURRENTDATE}\n{USERNAME}"
+    "Ты - полезный AI-ассистент.\n\nКонтекст диалога:\n- Текущая дата и время: {CURRENTDATE}\n{USERNAME}",
 )
 DEFAULT_PROMPT = os.environ.get("DEFAULT_PROMPT", "")
 
@@ -48,7 +48,9 @@ MAX_CONTEXT = int(os.environ.get("MAX_CONTEXT") or "10")
 MAX_STORAGE = int(os.environ.get("MAX_STORAGE", "100"))  # Количество сообщений в БД
 
 # Интервал проверки подписки (в секундах)
-SUBSCRIPTION_CHECK_INTERVAL = int(os.environ.get("SUBSCRIPTION_CHECK_INTERVAL") or "1800")  # По умолчанию 30 минут
+SUBSCRIPTION_CHECK_INTERVAL = int(
+    os.environ.get("SUBSCRIPTION_CHECK_INTERVAL") or "1800"
+)  # По умолчанию 30 минут
 
 # Ссылка на форму обратной связи (опционально)
 FEEDBACK_FORM_URL = os.environ.get("FEEDBACK_FORM_URL", "")

@@ -41,4 +41,3 @@ class OldMessage(Filter):
         message_time = message.date.replace(tzinfo=UTC)
         time_difference = now - message_time
         return time_difference >= timedelta(minutes=1)
-

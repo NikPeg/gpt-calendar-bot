@@ -36,11 +36,7 @@ def get_user_display_name(message: types.Message) -> str:
         Имя пользователя (first_name -> username -> "Аноним")
     """
     if message.from_user:
-        return (
-            message.from_user.first_name
-            or message.from_user.username
-            or "Аноним"
-        )
+        return message.from_user.first_name or message.from_user.username or "Аноним"
     return "Аноним"
 
 
@@ -75,11 +71,7 @@ async def handle_text_message(message: types.Message):
             new_name = (
                 message.from_user.first_name
                 if message.from_user.first_name
-                else (
-                    message.from_user.username
-                    if message.from_user.username
-                    else ""
-                )
+                else (message.from_user.username if message.from_user.username else "")
             )
         else:
             new_name = ""
@@ -88,7 +80,9 @@ async def handle_text_message(message: types.Message):
     if conversation.name != new_name and new_name:
         conversation.name = new_name
         await conversation.update_in_db()
-        logger.debug(f"{'CHAT' if message.chat.id < 0 else 'USER'}{message.chat.id} имя обновлено: {new_name}")
+        logger.debug(
+            f"{'CHAT' if message.chat.id < 0 else 'USER'}{message.chat.id} имя обновлено: {new_name}"
+        )
 
     # Подготавливаем текст для обработки
     # В групповых чатах добавляем имя пользователя перед сообщением
@@ -244,7 +238,9 @@ async def handle_photo_message(message: types.Message):
     if message.chat.id < 0:
         user_name = get_user_display_name(message)
         user_name_prefix = f"{user_name}: "
-        logger.debug(f"CHAT{message.chat.id}: добавлен префикс имени для фото - {user_name}")
+        logger.debug(
+            f"CHAT{message.chat.id}: добавлен префикс имени для фото - {user_name}"
+        )
 
     # Запускаем индикатор печати
     typing_task = asyncio.create_task(keep_typing(message.chat.id))
@@ -323,7 +319,9 @@ async def handle_video_message(message: types.Message):
     if message.chat.id < 0:
         user_name = get_user_display_name(message)
         user_name_prefix = f"{user_name}: "
-        logger.debug(f"CHAT{message.chat.id}: добавлен префикс имени для видео - {user_name}")
+        logger.debug(
+            f"CHAT{message.chat.id}: добавлен префикс имени для видео - {user_name}"
+        )
 
     # Запускаем индикатор печати
     typing_task = asyncio.create_task(keep_typing(message.chat.id))

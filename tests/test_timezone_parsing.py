@@ -9,9 +9,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from datetime import UTC, datetime, timedelta, timezone
-
-from services.calendar_functions import parse_datetime
+from services.calendar_functions import parse_datetime  # noqa: E402
 
 
 def test_parse_datetime_with_timezone():
@@ -19,7 +17,7 @@ def test_parse_datetime_with_timezone():
     # Время уже с timezone - должно конвертироваться в UTC
     dt_str = "2026-01-04T12:00:00+03:00"
     result = parse_datetime(dt_str, user_timezone_offset=3)
-    
+
     # Ожидаем 09:00 UTC (12:00 - 3 часа)
     expected = "2026-01-04T09:00:00Z"
     assert result == expected, f"Expected {expected}, got {result}"
@@ -30,7 +28,7 @@ def test_parse_datetime_without_timezone():
     # Время без timezone - должно интерпретироваться как время пользователя
     dt_str = "2026-01-04T12:00:00"
     result = parse_datetime(dt_str, user_timezone_offset=3)
-    
+
     # Ожидаем 09:00 UTC (12:00 в UTC+3 = 09:00 в UTC)
     expected = "2026-01-04T09:00:00Z"
     assert result == expected, f"Expected {expected}, got {result}"
@@ -41,7 +39,7 @@ def test_parse_datetime_without_offset():
     # Время без timezone и без offset - должно вернуться как есть
     dt_str = "2026-01-04T12:00:00"
     result = parse_datetime(dt_str, user_timezone_offset=None)
-    
+
     # Ожидаем исходную строку
     expected = dt_str
     assert result == expected, f"Expected {expected}, got {result}"
@@ -52,7 +50,7 @@ def test_parse_datetime_negative_offset():
     # Нью-Йорк (UTC-5)
     dt_str = "2026-01-04T12:00:00"
     result = parse_datetime(dt_str, user_timezone_offset=-5)
-    
+
     # Ожидаем 17:00 UTC (12:00 в UTC-5 = 17:00 в UTC)
     expected = "2026-01-04T17:00:00Z"
     assert result == expected, f"Expected {expected}, got {result}"
@@ -62,7 +60,7 @@ def test_parse_datetime_with_z_suffix():
     """Тест парсинга даты с Z суффиксом (UTC)."""
     dt_str = "2026-01-04T12:00:00Z"
     result = parse_datetime(dt_str, user_timezone_offset=3)
-    
+
     # Z означает UTC, время не должно меняться
     expected = "2026-01-04T12:00:00Z"
     assert result == expected, f"Expected {expected}, got {result}"
@@ -82,27 +80,26 @@ def test_parse_datetime_empty_string():
 
 if __name__ == "__main__":
     print("Запуск тестов...")
-    
+
     test_parse_datetime_with_timezone()
     print("✅ test_parse_datetime_with_timezone")
-    
+
     test_parse_datetime_without_timezone()
     print("✅ test_parse_datetime_without_timezone")
-    
+
     test_parse_datetime_without_offset()
     print("✅ test_parse_datetime_without_offset")
-    
+
     test_parse_datetime_negative_offset()
     print("✅ test_parse_datetime_negative_offset")
-    
+
     test_parse_datetime_with_z_suffix()
     print("✅ test_parse_datetime_with_z_suffix")
-    
+
     test_parse_datetime_none()
     print("✅ test_parse_datetime_none")
-    
+
     test_parse_datetime_empty_string()
     print("✅ test_parse_datetime_empty_string")
-    
-    print("\n🎉 Все тесты пройдены успешно!")
 
+    print("\n🎉 Все тесты пройдены успешно!")

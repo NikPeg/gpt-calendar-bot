@@ -25,18 +25,18 @@ def fix_nested_markdown(text: str) -> str:
         if i + len(tag) > len(text):
             return False
 
-        if text[i:i+len(tag)] != tag:
+        if text[i : i + len(tag)] != tag:
             return False
 
         if i == 0:
-            next_char = text[i + len(tag)] if i + len(tag) < len(text) else ''
-            return next_char and next_char not in ' \n\t'
+            next_char = text[i + len(tag)] if i + len(tag) < len(text) else ""
+            return next_char and next_char not in " \n\t"
 
         prev_char = text[i - 1]
-        next_char = text[i + len(tag)] if i + len(tag) < len(text) else ''
+        next_char = text[i + len(tag)] if i + len(tag) < len(text) else ""
 
-        if prev_char in ' \n\t([{':
-            return next_char and next_char not in ' \n\t'
+        if prev_char in " \n\t([{":
+            return next_char and next_char not in " \n\t"
 
         return False
 
@@ -45,23 +45,23 @@ def fix_nested_markdown(text: str) -> str:
         if i + len(tag) > len(text):
             return False
 
-        if text[i:i+len(tag)] != tag:
+        if text[i : i + len(tag)] != tag:
             return False
 
         if i + len(tag) >= len(text):
-            prev_char = text[i - 1] if i > 0 else ''
-            return prev_char and prev_char not in ' \n\t'
+            prev_char = text[i - 1] if i > 0 else ""
+            return prev_char and prev_char not in " \n\t"
 
-        prev_char = text[i - 1] if i > 0 else ''
+        prev_char = text[i - 1] if i > 0 else ""
         next_char = text[i + len(tag)]
 
-        if prev_char and prev_char not in ' \n\t':
-            return next_char in ' \n\t.!?,;:)]}' or i + len(tag) == len(text)
+        if prev_char and prev_char not in " \n\t":
+            return next_char in " \n\t.!?,;:)]}" or i + len(tag) == len(text)
 
         return False
 
     # Теги для обработки
-    tags = ['||', '__', '_', '*', '~', '`']
+    tags = ["||", "__", "_", "*", "~", "`"]
 
     result = []
     stack = []  # Стек открытых тегов
@@ -71,7 +71,7 @@ def fix_nested_markdown(text: str) -> str:
         matched_tag = None
 
         for tag in tags:
-            if text[i:i+len(tag)] == tag:
+            if text[i : i + len(tag)] == tag:
                 matched_tag = tag
                 break
 
@@ -96,10 +96,10 @@ def fix_nested_markdown(text: str) -> str:
                         break
 
                 if not found:
-                    result.append('\\')
+                    result.append("\\")
                     result.append(tag)
             else:
-                result.append('\\')
+                result.append("\\")
                 result.append(tag)
 
             i += tag_len
@@ -114,12 +114,12 @@ def fix_nested_markdown(text: str) -> str:
 
     while stack:
         tag, pos = stack.pop()
-        result.insert(pos, '\\')
+        result.insert(pos, "\\")
 
-    fixed_text = ''.join(result)
+    fixed_text = "".join(result)
 
     # Шаг 2: Проверяем и экранируем специальные символы MarkdownV2
-    special_chars = ['>', '#', '+', '-', '=', '{', '}', '.', '!']
+    special_chars = [">", "#", "+", "-", "=", "{", "}", ".", "!"]
 
     result2 = []
     i = 0
@@ -128,7 +128,7 @@ def fix_nested_markdown(text: str) -> str:
     while i < len(fixed_text):
         char = fixed_text[i]
 
-        if char == '`' and (i == 0 or fixed_text[i-1] != '\\'):
+        if char == "`" and (i == 0 or fixed_text[i - 1] != "\\"):
             in_code = not in_code
             result2.append(char)
             i += 1
@@ -140,17 +140,17 @@ def fix_nested_markdown(text: str) -> str:
             continue
 
         if char in special_chars:
-            if i > 0 and fixed_text[i-1] == '\\':
+            if i > 0 and fixed_text[i - 1] == "\\":
                 result2.append(char)
             else:
-                result2.append('\\')
+                result2.append("\\")
                 result2.append(char)
             i += 1
         else:
             result2.append(char)
             i += 1
 
-    return ''.join(result2)
+    return "".join(result2)
 
 
 class TestFixNestedMarkdown:
@@ -432,4 +432,3 @@ class TestFixNestedMarkdown:
 
         # ! должен быть экранирован
         assert "\\!" in result
-

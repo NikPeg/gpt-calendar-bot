@@ -46,4 +46,3 @@ async def upgrade():
             await db.commit()
             return "Поле timezone_offset добавлено в таблицу conversations"
         return "Поле timezone_offset уже существует"
-

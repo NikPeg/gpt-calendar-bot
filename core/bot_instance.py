@@ -8,4 +8,3 @@ from core.config import TG_TOKEN
 
 bot = Bot(token=TG_TOKEN)
 dp = Dispatcher()
-

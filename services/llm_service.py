@@ -71,14 +71,22 @@ async def get_llm_response(
 
     # Формируем системный промпт с подстановкой данных
     # Используем персональный часовой пояс пользователя или значение по умолчанию
-    user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
-    current_date = datetime.now(timezone(timedelta(hours=user_timezone_offset))).strftime(
-        "%Y-%m-%d %H:%M:%S"
+    user_timezone_offset = (
+        conversation.timezone_offset
+        if conversation.timezone_offset is not None
+        else TIMEZONE_OFFSET
     )
+    current_date = datetime.now(
+        timezone(timedelta(hours=user_timezone_offset))
+    ).strftime("%Y-%m-%d %H:%M:%S")
     system_content = SYSTEM_PROMPT.replace("{CURRENTDATE}", current_date)
-    
+
     # Добавляем информацию о часовом поясе пользователя
-    offset_str = f"+{user_timezone_offset}" if user_timezone_offset >= 0 else str(user_timezone_offset)
+    offset_str = (
+        f"+{user_timezone_offset}"
+        if user_timezone_offset >= 0
+        else str(user_timezone_offset)
+    )
     timezone_info = f"\n\nВажно: Пользователь находится в часовом поясе UTC{offset_str}. Когда пользователь указывает время (например, '12:00' или 'завтра в 15:00'), интерпретируй это время в часовом поясе пользователя (UTC{offset_str}), а затем конвертируй в UTC для создания события в календаре."
     system_content += timezone_info
 
@@ -144,7 +152,9 @@ async def get_llm_response(
         return None, conversation
 
     # Обрабатываем ответ (может быть текст или function calling)
-    llm_msg = await _process_llm_response(response, chat_id, prompt_for_request, functions)
+    llm_msg = await _process_llm_response(
+        response, chat_id, prompt_for_request, functions
+    )
 
     if llm_msg is None or llm_msg.strip() == "":
         logger.error(f"LLM{chat_id} - пустой ответ после обработки")
@@ -160,53 +170,59 @@ async def _process_llm_response(
 ) -> str | None:
     """
     Обрабатывает ответ от LLM, включая function calling.
-    
+
     Args:
         response: Ответ от LLM (объект message)
         chat_id: ID чата
         prompt: Текущий промпт
         functions: Список доступных функций
-        
+
     Returns:
         Текст ответа для пользователя
     """
     if not response:
         return None
-    
+
     # Проверяем, есть ли tool_calls (function calling)
     tool_calls = response.get("tool_calls")
-    
+
     if tool_calls and functions:
         # Обрабатываем function calling
         function_results = []
-        
+
         for tool_call in tool_calls:
             function_name = tool_call.get("function", {}).get("name")
             function_args_str = tool_call.get("function", {}).get("arguments", "{}")
-            
+
             try:
                 function_args = json.loads(function_args_str)
             except json.JSONDecodeError as e:
                 logger.error(f"Error parsing function arguments: {e}")
-                function_results.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.get("id"),
-                    "content": "Ошибка: неверный формат аргументов функции",
-                })
+                function_results.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id"),
+                        "content": "Ошибка: неверный формат аргументов функции",
+                    }
+                )
                 continue
 
-            logger.info(f"LLM{chat_id}: Calling function {function_name} with args: {function_args}")
+            logger.info(
+                f"LLM{chat_id}: Calling function {function_name} with args: {function_args}"
+            )
 
             # Выполняем функцию
             result = await execute_calendar_function(
                 function_name, function_args, chat_id
             )
 
-            function_results.append({
-                "role": "tool",
-                "tool_call_id": tool_call.get("id"),
-                "content": result,
-            })
+            function_results.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id"),
+                    "content": result,
+                }
+            )
 
         # Добавляем результаты функций в промпт и запрашиваем финальный ответ
         prompt.append(response)  # Добавляем сообщение с tool_calls
@@ -215,7 +231,9 @@ async def _process_llm_response(
         # Запрашиваем финальный ответ от LLM
         try:
             final_response = await send_request_to_openrouter(
-                prompt, functions=functions, function_call="none"  # Не вызываем функции снова
+                prompt,
+                functions=functions,
+                function_call="none",  # Не вызываем функции снова
             )
 
             if final_response and isinstance(final_response, dict):
@@ -223,7 +241,9 @@ async def _process_llm_response(
                 if content:
                     return content
         except Exception as e:
-            logger.error(f"Error getting final response after function call: {e}", exc_info=True)
+            logger.error(
+                f"Error getting final response after function call: {e}", exc_info=True
+            )
             # Возвращаем результаты функций напрямую
             if function_results:
                 return "\n\n".join([r["content"] for r in function_results])
@@ -300,7 +320,10 @@ async def process_user_message(chat_id: int, message_text: str) -> str | None:
 
 
 async def process_user_image(
-    chat_id: int, image_bytes: bytes, image_mime_type: str = "image/jpeg", user_name_prefix: str = ""
+    chat_id: int,
+    image_bytes: bytes,
+    image_mime_type: str = "image/jpeg",
+    user_name_prefix: str = "",
 ) -> str | None:
     """
     Обрабатывает изображение от пользователя через vision модель и отправляет описание в LLM.
@@ -341,7 +364,10 @@ async def process_user_image(
 
 
 async def process_user_video(
-    chat_id: int, video_bytes: bytes, video_duration: int | None = None, user_name_prefix: str = ""
+    chat_id: int,
+    video_bytes: bytes,
+    video_duration: int | None = None,
+    user_name_prefix: str = "",
 ) -> str | None:
     """
     Обрабатывает видео от пользователя через vision модель и отправляет описание в LLM.
@@ -473,14 +499,22 @@ async def process_user_video(
         context_messages = await conversation.get_context_for_llm()
 
         # Используем персональный часовой пояс пользователя или значение по умолчанию
-        user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
-        current_date = datetime.now(timezone(timedelta(hours=user_timezone_offset))).strftime(
-            "%Y-%m-%d %H:%M:%S"
+        user_timezone_offset = (
+            conversation.timezone_offset
+            if conversation.timezone_offset is not None
+            else TIMEZONE_OFFSET
         )
+        current_date = datetime.now(
+            timezone(timedelta(hours=user_timezone_offset))
+        ).strftime("%Y-%m-%d %H:%M:%S")
         system_content = SYSTEM_PROMPT.replace("{CURRENTDATE}", current_date)
-        
+
         # Добавляем информацию о часовом поясе пользователя
-        offset_str = f"+{user_timezone_offset}" if user_timezone_offset >= 0 else str(user_timezone_offset)
+        offset_str = (
+            f"+{user_timezone_offset}"
+            if user_timezone_offset >= 0
+            else str(user_timezone_offset)
+        )
         timezone_info = f"\n\nВажно: Пользователь находится в часовом поясе UTC{offset_str}. Когда пользователь указывает время (например, '12:00' или 'завтра в 15:00'), интерпретируй это время в часовом поясе пользователя (UTC{offset_str}), а затем конвертируй в UTC для создания события в календаре."
         system_content += timezone_info
 

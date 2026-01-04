@@ -94,15 +94,24 @@ class CalendarService:
             # Для Gmail аккаунтов, календарь может быть доступен напрямую по email
             # если он был расшарен с сервисным аккаунтом
             # Сначала пробуем получить календарь напрямую по email
-            if "@gmail.com" in user_email.lower() or "@googlemail.com" in user_email.lower():
+            if (
+                "@gmail.com" in user_email.lower()
+                or "@googlemail.com" in user_email.lower()
+            ):
                 try:
                     # Для Gmail, ID календаря обычно это сам email
-                    calendar = self.service.calendars().get(calendarId=user_email).execute()
-                    logger.debug(f"Successfully accessed calendar directly by email: {user_email}")
+                    calendar = (
+                        self.service.calendars().get(calendarId=user_email).execute()
+                    )
+                    logger.debug(
+                        f"Successfully accessed calendar directly by email: {user_email}"
+                    )
                     return user_email
                 except HttpError:
                     # Если прямой доступ не работает, продолжаем со списком календарей
-                    logger.debug(f"Direct access to {user_email} failed, trying calendar list")
+                    logger.debug(
+                        f"Direct access to {user_email} failed, trying calendar list"
+                    )
                 except Exception:
                     # Игнорируем ошибки и продолжаем
                     pass
@@ -111,7 +120,7 @@ class CalendarService:
             # Для этого нужно, чтобы сервисный аккаунт имел доступ к календарю пользователя
             calendar_list = self.service.calendarList().list().execute()
             calendars = calendar_list.get("items", [])
-            
+
             # Ищем календарь пользователя по email в списке доступных календарей
             for calendar in calendars:
                 calendar_id = calendar.get("id", "")
@@ -119,26 +128,28 @@ class CalendarService:
                 if user_email.lower() in calendar_id.lower():
                     logger.debug(f"Found user calendar in list: {calendar_id}")
                     return calendar_id
-                
+
                 # Также проверяем по summary (название календаря)
                 summary = calendar.get("summary", "").lower()
                 email_prefix = user_email.split("@")[0].lower()
                 if email_prefix in summary or user_email.lower() in summary:
-                    logger.debug(f"Found user calendar by summary: {calendar.get('summary')}")
+                    logger.debug(
+                        f"Found user calendar by summary: {calendar.get('summary')}"
+                    )
                     return calendar_id
-            
+
             # Ищем основной календарь
             for calendar in calendars:
                 if calendar.get("primary", False):
                     logger.debug(f"Found primary calendar: {calendar.get('id')}")
                     return calendar["id"]
-            
+
             # Если не нашли, возвращаем первый доступный
             if calendars:
                 calendar_id = calendars[0].get("id")
                 logger.debug(f"Using first available calendar: {calendar_id}")
                 return calendar_id
-            
+
             # Если календарей нет, создаем новый
             logger.warning("No calendars found, creating new one")
             return self._create_primary_calendar(user_email)
@@ -156,9 +167,7 @@ class CalendarService:
 
         try:
             calendar = {"summary": "Telegram Bot Calendar", "timeZone": "UTC"}
-            created_calendar = (
-                self.service.calendars().insert(body=calendar).execute()
-            )
+            created_calendar = self.service.calendars().insert(body=calendar).execute()
             return created_calendar["id"]
         except Exception as e:
             logger.error(f"Error creating calendar: {e}")
@@ -285,9 +294,7 @@ class CalendarService:
                 params["timeMax"] = self._ensure_rfc3339_format(time_max)
 
             # Получаем события
-            events_result = (
-                self.service.events().list(**params).execute()
-            )
+            events_result = self.service.events().list(**params).execute()
             return events_result.get("items", [])
         except HttpError as e:
             logger.error(f"Error listing events: {e}")
@@ -296,9 +303,7 @@ class CalendarService:
             logger.error(f"Unexpected error listing events: {e}")
             return []
 
-    def get_event(
-        self, user_email: str, event_id: str
-    ) -> dict[str, Any] | None:
+    def get_event(self, user_email: str, event_id: str) -> dict[str, Any] | None:
         """
         Получает событие по ID.
 
@@ -395,9 +400,7 @@ class CalendarService:
             logger.error(f"Unexpected error updating event: {e}")
             return None
 
-    def delete_event(
-        self, user_email: str, event_id: str
-    ) -> bool:
+    def delete_event(self, user_email: str, event_id: str) -> bool:
         """
         Удаляет событие из календаря.
 
@@ -428,4 +431,3 @@ class CalendarService:
         except Exception as e:
             logger.error(f"Unexpected error deleting event: {e}")
             return False
-

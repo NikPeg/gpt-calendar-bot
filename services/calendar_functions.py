@@ -128,11 +128,13 @@ CALENDAR_FUNCTIONS = [
 ]
 
 
-def parse_datetime(datetime_str: str | None, user_timezone_offset: int | None = None) -> str | None:
+def parse_datetime(
+    datetime_str: str | None, user_timezone_offset: int | None = None
+) -> str | None:
     """
     Парсит строку с датой/временем в ISO 8601 формат.
     Поддерживает относительные времена (например, "через 2 часа", "завтра в 15:00").
-    
+
     Если datetime_str не содержит информацию о часовом поясе, предполагается,
     что время указано в часовом поясе пользователя и конвертируется в UTC.
 
@@ -256,15 +258,27 @@ async def execute_calendar_function(
                 return "❌ Не указано название события"
 
             description = arguments.get("description")
-            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
-            start_datetime = parse_datetime(arguments.get("start_datetime"), user_timezone_offset)
-            end_datetime = parse_datetime(arguments.get("end_datetime"), user_timezone_offset)
+            user_timezone_offset = (
+                conversation.timezone_offset
+                if conversation.timezone_offset is not None
+                else TIMEZONE_OFFSET
+            )
+            start_datetime = parse_datetime(
+                arguments.get("start_datetime"), user_timezone_offset
+            )
+            end_datetime = parse_datetime(
+                arguments.get("end_datetime"), user_timezone_offset
+            )
             location = arguments.get("location")
 
             # Если время не указано, используем текущее время
             if not start_datetime:
                 # Используем персональный часовой пояс пользователя или значение по умолчанию
-                user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+                user_timezone_offset = (
+                    conversation.timezone_offset
+                    if conversation.timezone_offset is not None
+                    else TIMEZONE_OFFSET
+                )
                 now = datetime.now(timezone(timedelta(hours=user_timezone_offset)))
                 # Форматируем в RFC3339 для Google Calendar API
                 start_datetime = now.isoformat().replace("+00:00", "Z")
@@ -286,7 +300,11 @@ async def execute_calendar_function(
 
         if function_name == "list_calendar_events":
             max_results = arguments.get("max_results", 10)
-            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+            user_timezone_offset = (
+                conversation.timezone_offset
+                if conversation.timezone_offset is not None
+                else TIMEZONE_OFFSET
+            )
             time_min = parse_datetime(arguments.get("time_min"), user_timezone_offset)
             time_max = parse_datetime(arguments.get("time_max"), user_timezone_offset)
 
@@ -343,9 +361,17 @@ async def execute_calendar_function(
 
             summary = arguments.get("summary")
             description = arguments.get("description")
-            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
-            start_datetime = parse_datetime(arguments.get("start_datetime"), user_timezone_offset)
-            end_datetime = parse_datetime(arguments.get("end_datetime"), user_timezone_offset)
+            user_timezone_offset = (
+                conversation.timezone_offset
+                if conversation.timezone_offset is not None
+                else TIMEZONE_OFFSET
+            )
+            start_datetime = parse_datetime(
+                arguments.get("start_datetime"), user_timezone_offset
+            )
+            end_datetime = parse_datetime(
+                arguments.get("end_datetime"), user_timezone_offset
+            )
             location = arguments.get("location")
 
             event = calendar_service.update_event(

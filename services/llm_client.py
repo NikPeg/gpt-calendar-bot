@@ -25,7 +25,7 @@ async def send_request_to_openrouter(
 ):
     """
     Отправляет запрос к OpenRouter API.
-    
+
     Args:
         prompt: Список сообщений для промпта
         model: Модель для использования
@@ -38,7 +38,7 @@ async def send_request_to_openrouter(
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     data = {"model": model, "messages": prompt}
-    
+
     # Добавляем функции если они указаны
     if functions:
         data["tools"] = [{"type": "function", "function": func} for func in functions]
@@ -122,7 +122,9 @@ async def send_request_to_openrouter(
                 await asyncio.sleep(delay)
                 delay *= backoff_factor
             else:
-                logger.error(f"Error sending request to OpenRouter after {retries} attempts: {e}")
+                logger.error(
+                    f"Error sending request to OpenRouter after {retries} attempts: {e}"
+                )
                 return None
         except json.JSONDecodeError as e:
             # JSON ошибки могут быть из-за неполного ответа при обрыве соединения
@@ -133,7 +135,9 @@ async def send_request_to_openrouter(
                 await asyncio.sleep(delay)
                 delay *= backoff_factor
             else:
-                logger.error(f"Error decoding JSON response after {retries} attempts: {e}")
+                logger.error(
+                    f"Error decoding JSON response after {retries} attempts: {e}"
+                )
                 return None
 
     return None

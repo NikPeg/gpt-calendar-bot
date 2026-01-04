@@ -111,4 +111,3 @@ class SubscriptionMiddleware(BaseMiddleware):
 
         # Чат верифицирован, продолжаем обработку
         return await handler(event, data)
-

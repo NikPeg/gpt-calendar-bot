@@ -106,15 +106,21 @@ async def registration(message: types.Message):
             else (user.username if user and user.username else "")
         )
 
-    conversation = Conversation(int(message.chat.id), user_name, referral_code=referral_code)
+    conversation = Conversation(
+        int(message.chat.id), user_name, referral_code=referral_code
+    )
     await conversation.save_for_db()
-    
+
     # Проверяем, настроен ли календарь
     if not conversation.service_account_json:
         # Календарь не настроен - показываем инструкцию
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="Настроить календарь", callback_data="setup_calendar")],
+                [
+                    InlineKeyboardButton(
+                        text="Настроить календарь", callback_data="setup_calendar"
+                    )
+                ],
             ]
         )
         sent_msg = await message.answer(
@@ -144,17 +150,21 @@ async def registration(message: types.Message):
 async def cmd_start(message: types.Message):
     """Команда /start - приветствие и настройка календаря."""
     user_id = message.chat.id
-    
+
     # Получаем информацию о пользователе
     conversation = Conversation(user_id)
     await conversation.get_from_db()
-    
+
     # Проверяем, настроен ли календарь
     if not conversation.service_account_json:
         # Календарь не настроен - показываем инструкцию
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="Настроить календарь", callback_data="setup_calendar")],
+                [
+                    InlineKeyboardButton(
+                        text="Настроить календарь", callback_data="setup_calendar"
+                    )
+                ],
             ]
         )
         sent_msg = await message.answer(
@@ -168,7 +178,11 @@ async def cmd_start(message: types.Message):
         )
 
     # Проверяем статус подписки, если есть обязательные каналы
-    if REQUIRED_CHANNELS and user_id != ADMIN_CHAT and conversation.subscription_verified != 1:
+    if (
+        REQUIRED_CHANNELS
+        and user_id != ADMIN_CHAT
+        and conversation.subscription_verified != 1
+    ):
         # Если пользователь не подписан (0) или подписка не проверялась (None), показываем сообщение
         await send_subscription_request(user_id)
 
@@ -265,12 +279,14 @@ async def cmd_timezone(message: types.Message):
 
     # Получаем аргументы команды
     args = message.text.split() if message.text else []
-    
+
     if len(args) < 2:
         # Показываем текущий часовой пояс и инструкцию
         current_offset = conversation.timezone_offset
         if current_offset is not None:
-            offset_str = f"+{current_offset}" if current_offset >= 0 else str(current_offset)
+            offset_str = (
+                f"+{current_offset}" if current_offset >= 0 else str(current_offset)
+            )
             response = (
                 f"🕐 Текущий часовой пояс: UTC{offset_str}\n\n"
                 f"Чтобы изменить часовой пояс, используйте:\n"
@@ -283,8 +299,11 @@ async def cmd_timezone(message: types.Message):
             )
         else:
             from core.config import TIMEZONE_OFFSET
+
             default_offset = TIMEZONE_OFFSET
-            offset_str = f"+{default_offset}" if default_offset >= 0 else str(default_offset)
+            offset_str = (
+                f"+{default_offset}" if default_offset >= 0 else str(default_offset)
+            )
             response = (
                 f"🕐 Часовой пояс не установлен (используется значение по умолчанию: UTC{offset_str})\n\n"
                 f"Чтобы установить свой часовой пояс, используйте:\n"
@@ -307,7 +326,7 @@ async def cmd_timezone(message: types.Message):
                     "Примеры:\n"
                     "• /timezone 3 (Москва, UTC+3)\n"
                     "• /timezone -5 (Нью-Йорк, UTC-5)",
-                    reply_markup=ReplyKeyboardRemove()
+                    reply_markup=ReplyKeyboardRemove(),
                 )
             else:
                 conversation.timezone_offset = offset
@@ -315,7 +334,7 @@ async def cmd_timezone(message: types.Message):
                 offset_str = f"+{offset}" if offset >= 0 else str(offset)
                 sent_msg = await message.answer(
                     f"✅ Часовой пояс установлен: UTC{offset_str}",
-                    reply_markup=ReplyKeyboardRemove()
+                    reply_markup=ReplyKeyboardRemove(),
                 )
                 logger.info(f"USER{user_id}: timezone_offset установлен на {offset}")
         except ValueError:
@@ -324,7 +343,7 @@ async def cmd_timezone(message: types.Message):
                 "Примеры:\n"
                 "• /timezone 3 (Москва, UTC+3)\n"
                 "• /timezone -5 (Нью-Йорк, UTC-5)",
-                reply_markup=ReplyKeyboardRemove()
+                reply_markup=ReplyKeyboardRemove(),
             )
 
     # Не пересылаем сообщения из админ-чата в админ-чат

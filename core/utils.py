@@ -169,139 +169,142 @@ async def should_respond_in_chat(message: types.Message) -> bool:
 def parse_telegram_error(error_message: str) -> tuple[str | None, int | None]:
     """
     Парсит сообщение об ошибке от Telegram и извлекает тип entity и byte offset.
-    
+
     Примеры ошибок:
     - "Can't find end of Underline entity at byte offset 487"
     - "Can't find end of Bold entity at byte offset 123"
     - "Can't find end of Italic entity at byte offset 42"
-    
+
     Args:
         error_message: Сообщение об ошибке от Telegram
-        
+
     Returns:
         Кортеж (символ, byte_offset) или (None, None) если не удалось распарсить
     """
     import re
-    
+
     # Маппинг типов entity на символы markdown
     entity_to_char = {
-        'underline': '__',
-        'bold': '*',
-        'italic': '_',
-        'strikethrough': '~',
-        'code': '`',
-        'spoiler': '||',
+        "underline": "__",
+        "bold": "*",
+        "italic": "_",
+        "strikethrough": "~",
+        "code": "`",
+        "spoiler": "||",
     }
-    
+
     # Ищем тип entity и byte offset
     # Паттерн: "Can't find end of <EntityType> entity at byte offset <number>"
     pattern = r"Can't find end of (\w+) entity at byte offset (\d+)"
     match = re.search(pattern, error_message, re.IGNORECASE)
-    
+
     if match:
         entity_type = match.group(1).lower()
         byte_offset = int(match.group(2))
-        
+
         # Получаем соответствующий символ
         char = entity_to_char.get(entity_type)
         if char:
             return char, byte_offset
-    
+
     return None, None
 
 
 def fix_markdown_at_offset(text: str, problem_char: str, byte_offset: int) -> str:
     """
     Исправляет конкретный проблемный символ markdown в указанной позиции.
-    
+
     Стратегия:
     1. Находим позицию в тексте по byte offset (учитывая UTF-8)
     2. Ищем непарный символ problem_char около этой позиции
     3. Экранируем его
-    
+
     Args:
         text: Исходный текст
         problem_char: Проблемный символ markdown ('_', '__', '*', и т.д.)
         byte_offset: Позиция в байтах где находится проблема
-        
+
     Returns:
         Исправленный текст
     """
     # Конвертируем byte offset в character offset
-    text_bytes = text.encode('utf-8')
-    
+    text_bytes = text.encode("utf-8")
+
     # Проверяем, что offset валидный
     if byte_offset >= len(text_bytes):
         byte_offset = len(text_bytes) - 1
-    
+
     # Находим character offset соответствующий byte offset
-    char_offset = len(text_bytes[:byte_offset].decode('utf-8', errors='ignore'))
-    
+    char_offset = len(text_bytes[:byte_offset].decode("utf-8", errors="ignore"))
+
     # Ищем все вхождения problem_char в тексте
     char_len = len(problem_char)
     positions = []
     i = 0
     while i <= len(text) - char_len:
         # Проверяем, не экранирован ли уже
-        if text[i:i+char_len] == problem_char and (i == 0 or text[i-1] != '\\'):
+        if text[i : i + char_len] == problem_char and (i == 0 or text[i - 1] != "\\"):
             positions.append(i)
         i += 1
-    
+
     if not positions:
         # Нет вхождений - возвращаем как есть
         return text
-    
+
     # Находим ближайшую позицию к проблемному offset
     closest_pos = min(positions, key=lambda p: abs(p - char_offset))
-    
+
     # Теперь проверяем пары: открывающий и закрывающий символы
     # Для problem_char типа '_' или '__':
     # - Открывающий: идет после пробела/начала и перед не-пробелом
     # - Закрывающий: идет после не-пробела и перед пробелом/концом
-    
+
     def is_opening(pos: int) -> bool:
         """Проверяет, является ли символ на позиции открывающим тегом."""
         if pos + char_len > len(text):
             return False
-        
+
         # В начале строки
         if pos == 0:
-            next_char = text[pos + char_len] if pos + char_len < len(text) else ''
-            return next_char and next_char not in ' \n\t'
-        
+            next_char = text[pos + char_len] if pos + char_len < len(text) else ""
+            return next_char and next_char not in " \n\t"
+
         prev_char = text[pos - 1]
-        next_char = text[pos + char_len] if pos + char_len < len(text) else ''
-        
+        next_char = text[pos + char_len] if pos + char_len < len(text) else ""
+
         # После пробела/скобки и перед не-пробелом
-        return prev_char in ' \n\t([{' and next_char and next_char not in ' \n\t'
-    
+        return prev_char in " \n\t([{" and next_char and next_char not in " \n\t"
+
     def is_closing(pos: int) -> bool:
         """Проверяет, является ли символ на позиции закрывающим тегом."""
         if pos + char_len > len(text):
             return False
-        
+
         # В конце строки
         if pos + char_len >= len(text):
-            prev_char = text[pos - 1] if pos > 0 else ''
-            return prev_char and prev_char not in ' \n\t'
-        
-        prev_char = text[pos - 1] if pos > 0 else ''
+            prev_char = text[pos - 1] if pos > 0 else ""
+            return prev_char and prev_char not in " \n\t"
+
+        prev_char = text[pos - 1] if pos > 0 else ""
         next_char = text[pos + char_len]
-        
+
         # После не-пробела и перед пробелом/знаком препинания/концом
-        return (prev_char and prev_char not in ' \n\t' and
-                (next_char in ' \n\t.!?,;:)]}' or pos + char_len == len(text)))
-    
+        return (
+            prev_char
+            and prev_char not in " \n\t"
+            and (next_char in " \n\t.!?,;:)]}" or pos + char_len == len(text))
+        )
+
     # Проверяем все позиции и составляем пары
     opening_positions = []
     closing_positions = []
-    
+
     for pos in positions:
         if is_opening(pos):
             opening_positions.append(pos)
         elif is_closing(pos):
             closing_positions.append(pos)
-    
+
     # Составляем пары: для каждого открывающего ищем ближайший закрывающий
     paired = set()
     for open_pos in opening_positions:
@@ -311,14 +314,14 @@ def fix_markdown_at_offset(text: str, problem_char: str, byte_offset: int) -> st
             if close_pos > open_pos and close_pos not in paired:
                 matching_close = close_pos
                 break
-        
+
         if matching_close:
             paired.add(open_pos)
             paired.add(matching_close)
-    
+
     # Теперь находим непарные символы
     unpaired = [pos for pos in positions if pos not in paired]
-    
+
     if not unpaired:
         # Все символы парные, но все равно есть ошибка
         # Экранируем ближайший к проблемному offset
@@ -326,9 +329,9 @@ def fix_markdown_at_offset(text: str, problem_char: str, byte_offset: int) -> st
     else:
         # Экранируем непарный символ ближайший к проблемному offset
         pos_to_escape = min(unpaired, key=lambda p: abs(p - char_offset))
-    
+
     # Экранируем символ на позиции pos_to_escape
-    return text[:pos_to_escape] + '\\' + text[pos_to_escape:]
+    return text[:pos_to_escape] + "\\" + text[pos_to_escape:]
 
 
 def fix_nested_markdown(text: str) -> str:
@@ -368,20 +371,20 @@ def fix_nested_markdown(text: str) -> str:
             return False
 
         # Проверяем, что это правильный тег
-        if text[i:i+len(tag)] != tag:
+        if text[i : i + len(tag)] != tag:
             return False
 
         # В начале строки - это может быть тег
         if i == 0:
-            next_char = text[i + len(tag)] if i + len(tag) < len(text) else ''
-            return next_char and next_char not in ' \n\t'
+            next_char = text[i + len(tag)] if i + len(tag) < len(text) else ""
+            return next_char and next_char not in " \n\t"
 
         prev_char = text[i - 1]
-        next_char = text[i + len(tag)] if i + len(tag) < len(text) else ''
+        next_char = text[i + len(tag)] if i + len(tag) < len(text) else ""
 
         # Открывающий тег обычно идет после пробела/начала и перед не-пробелом
-        if prev_char in ' \n\t([{':
-            return next_char and next_char not in ' \n\t'
+        if prev_char in " \n\t([{":
+            return next_char and next_char not in " \n\t"
 
         return False
 
@@ -392,25 +395,25 @@ def fix_nested_markdown(text: str) -> str:
             return False
 
         # Проверяем, что это правильный тег
-        if text[i:i+len(tag)] != tag:
+        if text[i : i + len(tag)] != tag:
             return False
 
         # В конце строки - это может быть тег
         if i + len(tag) >= len(text):
-            prev_char = text[i - 1] if i > 0 else ''
-            return prev_char and prev_char not in ' \n\t'
+            prev_char = text[i - 1] if i > 0 else ""
+            return prev_char and prev_char not in " \n\t"
 
-        prev_char = text[i - 1] if i > 0 else ''
+        prev_char = text[i - 1] if i > 0 else ""
         next_char = text[i + len(tag)]
 
         # Закрывающий тег обычно идет после не-пробела и перед пробелом/концом
-        if prev_char and prev_char not in ' \n\t':
-            return next_char in ' \n\t.!?,;:)]}' or i + len(tag) == len(text)
+        if prev_char and prev_char not in " \n\t":
+            return next_char in " \n\t.!?,;:)]}" or i + len(tag) == len(text)
 
         return False
 
     # Теги для обработки (от более длинных к коротким, чтобы правильно обработать __ перед _)
-    tags = ['||', '__', '_', '*', '~', '`']
+    tags = ["||", "__", "_", "*", "~", "`"]
 
     result = []
     stack = []  # Стек открытых тегов: [(tag, position_in_result)]
@@ -421,7 +424,7 @@ def fix_nested_markdown(text: str) -> str:
 
         # Проверяем все теги
         for tag in tags:
-            if text[i:i+len(tag)] == tag:
+            if text[i : i + len(tag)] == tag:
                 matched_tag = tag
                 break
 
@@ -454,11 +457,11 @@ def fix_nested_markdown(text: str) -> str:
 
                 if not found:
                     # Не нашли в стеке - экранируем
-                    result.append('\\')
+                    result.append("\\")
                     result.append(tag)
             else:
                 # Это вложенный тег того же типа - экранируем
-                result.append('\\')
+                result.append("\\")
                 result.append(tag)
 
             i += tag_len
@@ -478,13 +481,13 @@ def fix_nested_markdown(text: str) -> str:
     while stack:
         tag, pos = stack.pop()
         # Вставляем экранирование перед открывающим тегом
-        result.insert(pos, '\\')
+        result.insert(pos, "\\")
 
-    fixed_text = ''.join(result)
+    fixed_text = "".join(result)
 
     # Шаг 2: Проверяем и экранируем специальные символы MarkdownV2
     # Символы, которые должны быть экранированы вне markdown-тегов
-    special_chars = ['>', '#', '+', '-', '=', '{', '}', '.', '!']
+    special_chars = [">", "#", "+", "-", "=", "{", "}", ".", "!"]
 
     result2 = []
     i = 0
@@ -494,7 +497,7 @@ def fix_nested_markdown(text: str) -> str:
         char = fixed_text[i]
 
         # Отслеживаем code блоки (внутри них не экранируем)
-        if char == '`' and (i == 0 or fixed_text[i-1] != '\\'):
+        if char == "`" and (i == 0 or fixed_text[i - 1] != "\\"):
             in_code = not in_code
             result2.append(char)
             i += 1
@@ -509,19 +512,19 @@ def fix_nested_markdown(text: str) -> str:
         # Проверяем, нужно ли экранировать символ
         if char in special_chars:
             # Проверяем, не экранирован ли уже
-            if i > 0 and fixed_text[i-1] == '\\':
+            if i > 0 and fixed_text[i - 1] == "\\":
                 # Уже экранирован
                 result2.append(char)
             else:
                 # Экранируем
-                result2.append('\\')
+                result2.append("\\")
                 result2.append(char)
             i += 1
         else:
             result2.append(char)
             i += 1
 
-    return ''.join(result2)
+    return "".join(result2)
 
 
 async def send_message_with_fallback(
@@ -550,12 +553,15 @@ async def send_message_with_fallback(
         Exception: Если не удалось отправить сообщение ни одним способом
     """
     current_text = text
-    
+
     # Пытаемся отправить с целенаправленными исправлениями
     for attempt in range(max_fix_attempts + 1):
         try:
             return await bot.send_message(
-                chat_id=chat_id, text=current_text, parse_mode=ParseMode.MARKDOWN_V2, **kwargs
+                chat_id=chat_id,
+                text=current_text,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                **kwargs,
             )
         except TelegramForbiddenError:
             # Бот заблокирован - сразу пробрасываем
@@ -563,19 +569,22 @@ async def send_message_with_fallback(
         except TelegramBadRequest as e:
             error_message = str(e)
             error_message_lower = error_message.lower()
-            
+
             # Проверяем, это ошибка парсинга markdown
-            if "can't parse entities" not in error_message_lower and "can't find end" not in error_message_lower:
+            if (
+                "can't parse entities" not in error_message_lower
+                and "can't find end" not in error_message_lower
+            ):
                 # Это не ошибка парсинга - пробрасываем
                 raise
-            
+
             # Это ошибка парсинга
             if attempt == 0:
                 logger.debug(
                     f"CHAT{chat_id} - ошибка парсинга Markdown: {e}. "
                     f"Пробуем исправить markdown..."
                 )
-            
+
             # Если исчерпали попытки целенаправленного исправления
             if attempt >= max_fix_attempts:
                 logger.debug(
@@ -583,16 +592,18 @@ async def send_message_with_fallback(
                     f"({max_fix_attempts}). Пробуем общее исправление..."
                 )
                 break
-            
+
             # Пробуем целенаправленное исправление
             problem_char, byte_offset = parse_telegram_error(error_message)
-            
+
             if problem_char and byte_offset is not None:
                 logger.debug(
                     f"CHAT{chat_id} - попытка {attempt + 1}/{max_fix_attempts}: "
                     f"обнаружен проблемный символ '{problem_char}' на позиции {byte_offset}"
                 )
-                current_text = fix_markdown_at_offset(current_text, problem_char, byte_offset)
+                current_text = fix_markdown_at_offset(
+                    current_text, problem_char, byte_offset
+                )
             else:
                 # Не удалось распарсить ошибку - переходим к общему исправлению
                 logger.debug(
@@ -603,15 +614,13 @@ async def send_message_with_fallback(
         except Exception:
             # Любая другая ошибка - пробрасываем
             raise
-    
+
     # Если дошли сюда, значит целенаправленные исправления не помогли
     # Пробуем общее исправление markdown
     try:
         fixed_text = fix_nested_markdown(current_text)
-        logger.debug(
-            f"CHAT{chat_id} - применяем общее исправление markdown..."
-        )
-        
+        logger.debug(f"CHAT{chat_id} - применяем общее исправление markdown...")
+
         return await bot.send_message(
             chat_id=chat_id, text=fixed_text, parse_mode=ParseMode.MARKDOWN_V2, **kwargs
         )
@@ -624,25 +633,26 @@ async def send_message_with_fallback(
                 f"CHAT{chat_id} - общее исправление не помогло: {e}. "
                 f"Отправляем без форматирования."
             )
-            
+
             # Отправляем в админский чат для отладки
             try:
                 await bot.send_message(
                     ADMIN_CHAT,
                     f"⚠️ MARKDOWN FIX FAILED для CHAT{chat_id}\n"
                     f"Ошибка: {e}\n\n"
-                    f"=== ОРИГИНАЛЬНЫЙ ТЕКСТ (до исправлений) ==="
+                    f"=== ОРИГИНАЛЬНЫЙ ТЕКСТ (до исправлений) ===",
                 )
                 await bot.send_message(ADMIN_CHAT, text, parse_mode=None)
-                
+
                 await bot.send_message(
-                    ADMIN_CHAT,
-                    "=== ТЕКСТ ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ ==="
+                    ADMIN_CHAT, "=== ТЕКСТ ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ ==="
                 )
                 await bot.send_message(ADMIN_CHAT, fixed_text, parse_mode=None)
             except Exception as admin_err:
-                logger.error(f"Не удалось отправить отладочную информацию в админский чат: {admin_err}")
-            
+                logger.error(
+                    f"Не удалось отправить отладочную информацию в админский чат: {admin_err}"
+                )
+
             kwargs.pop("parse_mode", None)
             return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
         except TelegramForbiddenError:
@@ -652,5 +662,3 @@ async def send_message_with_fallback(
                 f"CHAT{chat_id} - не удалось отправить сообщение: {final_error}"
             )
             raise
-
-

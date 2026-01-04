@@ -57,7 +57,10 @@ async def test_markdown_debug_to_admin_chat():
             send_message_calls.append(call_info)
 
             # Если это попытка отправить с markdown в обычный чат
-            if parse_mode == ParseMode.MARKDOWN_V2 and chat_id != mock_config.ADMIN_CHAT:
+            if (
+                parse_mode == ParseMode.MARKDOWN_V2
+                and chat_id != mock_config.ADMIN_CHAT
+            ):
                 raise TelegramBadRequest(
                     method="sendMessage",
                     message="Can't parse entities: Can't find end of the entity starting at byte offset 42",
@@ -82,11 +85,15 @@ async def test_markdown_debug_to_admin_chat():
 
         # Проверяем, что были вызовы к админскому чату
         admin_calls = [
-            call for call in send_message_calls if call["chat_id"] == mock_config.ADMIN_CHAT
+            call
+            for call in send_message_calls
+            if call["chat_id"] == mock_config.ADMIN_CHAT
         ]
 
         # Должно быть минимум 3 сообщения в админский чат
-        assert len(admin_calls) >= 3, f"Expected at least 3 messages to admin chat, got {len(admin_calls)}"
+        assert len(admin_calls) >= 3, (
+            f"Expected at least 3 messages to admin chat, got {len(admin_calls)}"
+        )
 
         # Проверяем содержимое сообщений
         texts = [call["text"] for call in admin_calls]
@@ -103,7 +110,8 @@ async def test_markdown_debug_to_admin_chat():
 
         # Должно быть сообщение "ТЕКСТ ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ"
         has_fixed_marker = any(
-            "ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ" in text or "после" in text.lower() for text in texts
+            "ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ" in text or "после" in text.lower()
+            for text in texts
         )
         assert has_fixed_marker, "Fixed text marker not found in admin messages"
 
@@ -155,7 +163,9 @@ async def test_no_debug_messages_on_success():
 
         # Проверяем, что в админский чат НИЧЕГО не отправлено
         admin_calls = [
-            call for call in send_message_calls if call["chat_id"] == mock_config.ADMIN_CHAT
+            call
+            for call in send_message_calls
+            if call["chat_id"] == mock_config.ADMIN_CHAT
         ]
 
         assert len(admin_calls) == 0, "No debug messages should be sent on success"
@@ -164,4 +174,3 @@ async def test_no_debug_messages_on_success():
 if __name__ == "__main__":
     # Для быстрого запуска тестов
     pytest.main([__file__, "-v"])
-

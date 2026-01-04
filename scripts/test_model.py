@@ -22,61 +22,68 @@ LLM_TOKEN = os.environ.get("LLM_TOKEN")
 async def test_model(model_name: str, api_key: str = LLM_TOKEN) -> tuple[bool, str]:
     """
     Тестирует доступность модели через OpenRouter.
-    
+
     Args:
         model_name: Название модели для тестирования
         api_key: API ключ OpenRouter
-    
+
     Returns:
         Кортеж (успех, сообщение/ошибка)
     """
     url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
     # Простой тестовый запрос
     data = {
         "model": model_name,
         "messages": [
             {
                 "role": "user",
-                "content": "Привет! Это тестовый запрос. Ответь коротко: работает ли модель?"
+                "content": "Привет! Это тестовый запрос. Ответь коротко: работает ли модель?",
             }
-        ]
+        ],
     }
-    
+
     try:
         async with (
             aiohttp.ClientSession() as session,
-            session.post(url, headers=headers, data=json.dumps(data), timeout=aiohttp.ClientTimeout(total=30)) as response
+            session.post(
+                url,
+                headers=headers,
+                data=json.dumps(data),
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as response,
         ):
             response_text = await response.text()
-            
+
             # Если статус не 200, значит ошибка
             if response.status != 200:
                 try:
                     error_json = json.loads(response_text)
-                    error_message = error_json.get("error", {}).get("message", response_text)
+                    error_message = error_json.get("error", {}).get(
+                        "message", response_text
+                    )
                     return False, f"HTTP {response.status}: {error_message}"
                 except json.JSONDecodeError:
                     return False, f"HTTP {response.status}: {response_text[:200]}"
-            
+
             # Парсим успешный ответ
             try:
                 response_json = json.loads(response_text)
-                
+
                 if "choices" in response_json and len(response_json["choices"]) > 0:
                     content = response_json["choices"][0]["message"]["content"]
                     if content is None or content.strip() == "":
                         return False, "Модель вернула пустой ответ"
                     return True, content
                 return False, f"Нет choices в ответе: {response_json}"
-                    
+
             except json.JSONDecodeError as e:
-                return False, f"Ошибка парсинга JSON ответа: {e}\nОтвет: {response_text[:200]}"
-                
+                return (
+                    False,
+                    f"Ошибка парсинга JSON ответа: {e}\nОтвет: {response_text[:200]}",
+                )
+
     except aiohttp.ClientResponseError as e:
         return False, f"HTTP ошибка: {e}"
     except aiohttp.ClientError as e:
@@ -89,13 +96,13 @@ async def test_model(model_name: str, api_key: str = LLM_TOKEN) -> tuple[bool, s
 
 async def main():
     """Главная функция скрипта."""
-    
+
     # Проверяем наличие API ключа
     if not LLM_TOKEN:
         print("❌ Ошибка: не найден LLM_TOKEN в переменных окружения")
         print("Убедитесь, что файл .env содержит переменную LLM_TOKEN")
         return
-    
+
     print("=" * 60)
     print("Скрипт тестирования моделей OpenRouter")
     print("=" * 60)
@@ -108,30 +115,30 @@ async def main():
     print()
     print("Для выхода введите: exit")
     print("=" * 60)
-    
+
     # Бесконечный цикл для тестирования моделей
     while True:
         print()
         model_name = input("Модель: ").strip()
-        
+
         # Проверка на выход
         if model_name.lower() == "exit":
             print()
             print("👋 Выход из программы")
             break
-        
+
         # Проверка на пустой ввод
         if not model_name:
             print("⚠️ Название модели не может быть пустым")
             continue
-        
+
         print()
         print(f"🔄 Отправляю тестовый запрос к модели: {model_name}")
         print()
-        
+
         # Тестируем модель
         success, message = await test_model(model_name)
-        
+
         # Выводим результат
         print("-" * 60)
         if success:
@@ -155,5 +162,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Критическая ошибка: {e}")
         import traceback
-        traceback.print_exc()
 
+        traceback.print_exc()

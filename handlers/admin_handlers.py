@@ -253,6 +253,7 @@ async def cmd_stats(message: types.Message):
                 import aiosqlite
 
                 from core.database import DATABASE_NAME
+
                 all_user_ids = await Conversation.get_ids_from_table()
                 # Фильтруем только личных пользователей (положительные ID)
                 user_ids = [uid for uid in all_user_ids if uid > 0]
@@ -405,13 +406,9 @@ async def cmd_referral_stats(message: types.Message):
     Команда /referral_stats - статистика по реферальным ссылкам.
     Доступна только администратору.
     """
-    logger.info(
-        f"Команда /referral_stats получена от администратора {message.chat.id}"
-    )
+    logger.info(f"Команда /referral_stats получена от администратора {message.chat.id}")
 
-    status_msg = await message.answer(
-        "⏳ Собираю статистику по реферальным ссылкам..."
-    )
+    status_msg = await message.answer("⏳ Собираю статистику по реферальным ссылкам...")
 
     try:
         import aiosqlite
@@ -457,7 +454,9 @@ async def cmd_referral_stats(message: types.Message):
             report += "\n📈 Топ реферальных кодов:\n\n"
             for idx, (ref_code, count) in enumerate(referral_stats, 1):
                 # Ограничиваем длину кода для отображения
-                display_code = ref_code if len(ref_code) <= 30 else ref_code[:27] + "..."
+                display_code = (
+                    ref_code if len(ref_code) <= 30 else ref_code[:27] + "..."
+                )
                 report += f"{idx}. `{display_code}` — {count} чел.\n"
         else:
             report += "\n❌ Нет пользователей с реферальными кодами"

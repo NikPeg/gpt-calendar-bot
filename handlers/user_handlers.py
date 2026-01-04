@@ -167,7 +167,9 @@ async def cmd_start(message: types.Message):
     else:
         # Календарь уже настроен - показываем приветствие для настроенного пользователя
         sent_msg = await message.answer(
-            MESSAGES["msg_start_configured"], reply_markup=ReplyKeyboardRemove()
+            MESSAGES["msg_start_configured"],
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode="HTML",
         )
 
     # Проверяем статус подписки, если есть обязательные каналы

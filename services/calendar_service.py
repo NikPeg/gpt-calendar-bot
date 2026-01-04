@@ -303,6 +303,107 @@ class CalendarService:
             logger.error(f"Unexpected error listing events: {e}")
             return []
 
+    def list_events_from_calendar(
+        self,
+        calendar_id: str,
+        max_results: int = 10,
+        time_min: str | None = None,
+        time_max: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Получает список событий из конкретного календаря по его ID.
+
+        Args:
+            calendar_id: ID календаря
+            max_results: Максимальное количество событий
+            time_min: Минимальное время в формате ISO 8601
+            time_max: Максимальное время в формате ISO 8601
+
+        Returns:
+            Список событий
+        """
+        if not self.service:
+            return []
+
+        try:
+            # Параметры запроса
+            params = {
+                "calendarId": calendar_id,
+                "maxResults": max_results,
+                "singleEvents": True,
+                "orderBy": "startTime",
+            }
+
+            if time_min:
+                params["timeMin"] = self._ensure_rfc3339_format(time_min)
+            else:
+                now = datetime.now(UTC)
+                params["timeMin"] = now.isoformat().replace("+00:00", "Z")
+
+            if time_max:
+                params["timeMax"] = self._ensure_rfc3339_format(time_max)
+
+            # Получаем события
+            events_result = self.service.events().list(**params).execute()
+            events = events_result.get("items", [])
+
+            # Помечаем источник календаря для каждого события
+            for event in events:
+                event["_source_calendar_id"] = calendar_id
+
+            return events
+        except HttpError as e:
+            logger.error(f"Error listing events from calendar {calendar_id}: {e}")
+            return []
+        except Exception as e:
+            logger.error(
+                f"Unexpected error listing events from calendar {calendar_id}: {e}"
+            )
+            return []
+
+    def list_events_from_multiple_calendars(
+        self,
+        calendar_ids: list[str],
+        max_results: int = 10,
+        time_min: str | None = None,
+        time_max: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Получает события из нескольких календарей и объединяет их.
+
+        Args:
+            calendar_ids: Список ID календарей
+            max_results: Максимальное количество событий в итоговом списке
+            time_min: Минимальное время в формате ISO 8601
+            time_max: Максимальное время в формате ISO 8601
+
+        Returns:
+            Объединенный отсортированный список событий из всех календарей
+        """
+        if not self.service or not calendar_ids:
+            return []
+
+        all_events = []
+
+        # Получаем события из каждого календаря
+        for calendar_id in calendar_ids:
+            events = self.list_events_from_calendar(
+                calendar_id=calendar_id,
+                max_results=max_results,
+                time_min=time_min,
+                time_max=time_max,
+            )
+            all_events.extend(events)
+
+        # Сортируем все события по времени начала
+        all_events.sort(
+            key=lambda e: e.get("start", {}).get("dateTime")
+            or e.get("start", {}).get("date", "")
+        )
+
+        # Ограничиваем количество
+        return all_events[:max_results]
+
     def get_event(self, user_email: str, event_id: str) -> dict[str, Any] | None:
         """
         Получает событие по ID.

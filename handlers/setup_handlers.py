@@ -171,6 +171,43 @@ async def process_user_email(message: types.Message, state: FSMContext):
         conversation.user_email = user_email
         await conversation.update_in_db()
 
+        # Добавляем календари пользователя (основной + праздники России)
+        from core.database import UserCalendar
+        from core.public_calendars import RUSSIAN_HOLIDAYS
+
+        # Добавляем основной календарь
+        try:
+            primary_calendar = await UserCalendar.get_primary_calendar(user_id)
+            if not primary_calendar:
+                primary_calendar = UserCalendar(
+                    user_id=user_id,
+                    calendar_id=user_email,
+                    calendar_name="Основной календарь",
+                    calendar_type=UserCalendar.TYPE_PRIMARY,
+                    is_readonly=False,
+                    is_enabled=True,
+                )
+                await primary_calendar.save_to_db()
+                logger.info(f"USER{user_id}: Created primary calendar")
+
+            # Добавляем календарь праздников России (по умолчанию для всех)
+            calendars = await UserCalendar.get_user_calendars(user_id, enabled_only=False)
+            has_holidays = any(
+                c.calendar_id == RUSSIAN_HOLIDAYS.calendar_id for c in calendars
+            )
+            if not has_holidays:
+                holidays_calendar = await UserCalendar.add_public_calendar(
+                    user_id=user_id,
+                    calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
+                    calendar_name=RUSSIAN_HOLIDAYS.name,
+                )
+                logger.info(
+                    f"USER{user_id}: Added Russian holidays calendar (ID: {holidays_calendar.id})"
+                )
+        except Exception as e:
+            logger.error(f"USER{user_id}: Error setting up calendars: {e}", exc_info=True)
+            # Продолжаем даже при ошибке, чтобы не блокировать настройку
+
         # Проверяем доступ к календарю
         calendar_service = CalendarService(json_text)
         if not calendar_service.is_configured():
@@ -205,6 +242,9 @@ async def process_user_email(message: types.Message, state: FSMContext):
             f"📧 Ваш email: {user_email}\n"
             f"🔑 Сервисный аккаунт: {json.loads(json_text).get('client_email', '')}\n"
             f"📅 Календарь настроен и готов к использованию.\n\n"
+            "🎉 Добавлены календари:\n"
+            "  • Ваш основной календарь\n"
+            "  • Праздники России (автоматически)\n\n"
             "Теперь вы можете управлять своим календарем через бота!"
         )
 

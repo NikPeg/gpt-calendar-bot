@@ -404,6 +404,249 @@ async def check_db():
         return "Бд подгружена успешно"
 
 
+class UserCalendar:
+    """
+    Модель для работы с календарями пользователя.
+    Поддерживает множественные календари: основной, публичные (праздники), расшаренные.
+    """
+
+    # Типы календарей
+    TYPE_PRIMARY = "primary"  # Основной календарь пользователя (для записи)
+    TYPE_PUBLIC = "public"  # Публичные календари (только чтение)
+    TYPE_SHARED = "shared"  # Расшаренные календари
+
+    def __init__(
+        self,
+        id: int | None = None,
+        user_id: int | None = None,
+        calendar_id: str | None = None,
+        calendar_name: str | None = None,
+        calendar_type: str = TYPE_PRIMARY,
+        is_readonly: bool = False,
+        is_enabled: bool = True,
+        created_at: str | None = None,
+    ):
+        self.id = id
+        self.user_id = user_id
+        self.calendar_id = calendar_id
+        self.calendar_name = calendar_name
+        self.calendar_type = calendar_type
+        self.is_readonly = is_readonly
+        self.is_enabled = is_enabled
+        self.created_at = created_at
+
+    def __repr__(self):
+        return (
+            f"UserCalendar(id={self.id}, user_id={self.user_id}, "
+            f"calendar_id={self.calendar_id}, name={self.calendar_name}, "
+            f"type={self.calendar_type}, readonly={self.is_readonly}, "
+            f"enabled={self.is_enabled})"
+        )
+
+    async def save_to_db(self):
+        """Сохраняет календарь в базу данных."""
+        if not self.created_at:
+            current_time = datetime.now(UTC)
+            self.created_at = current_time.isoformat()
+
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                """
+                INSERT INTO user_calendars 
+                (user_id, calendar_id, calendar_name, calendar_type, is_readonly, is_enabled, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    self.user_id,
+                    self.calendar_id,
+                    self.calendar_name,
+                    self.calendar_type,
+                    1 if self.is_readonly else 0,
+                    1 if self.is_enabled else 0,
+                    self.created_at,
+                ),
+            )
+            self.id = cursor.lastrowid
+            await db.commit()
+            await cursor.close()
+
+    async def update_in_db(self):
+        """Обновляет календарь в базе данных."""
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                """
+                UPDATE user_calendars
+                SET calendar_name = ?, calendar_type = ?, is_readonly = ?, is_enabled = ?
+                WHERE id = ?
+                """,
+                (
+                    self.calendar_name,
+                    self.calendar_type,
+                    1 if self.is_readonly else 0,
+                    1 if self.is_enabled else 0,
+                    self.id,
+                ),
+            )
+            await db.commit()
+            await cursor.close()
+
+    async def delete_from_db(self):
+        """Удаляет календарь из базы данных."""
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+            await cursor.execute("DELETE FROM user_calendars WHERE id = ?", (self.id,))
+            await db.commit()
+            await cursor.close()
+
+    @staticmethod
+    async def get_user_calendars(
+        user_id: int, enabled_only: bool = True
+    ) -> list["UserCalendar"]:
+        """
+        Получает все календари пользователя.
+
+        Args:
+            user_id: ID пользователя
+            enabled_only: Если True, возвращает только включенные календари
+
+        Returns:
+            Список календарей пользователя
+        """
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+
+            if enabled_only:
+                sql = """
+                    SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                           is_readonly, is_enabled, created_at
+                    FROM user_calendars
+                    WHERE user_id = ? AND is_enabled = 1
+                    ORDER BY calendar_type, created_at
+                """
+            else:
+                sql = """
+                    SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                           is_readonly, is_enabled, created_at
+                    FROM user_calendars
+                    WHERE user_id = ?
+                    ORDER BY calendar_type, created_at
+                """
+
+            await cursor.execute(sql, (user_id,))
+            rows = await cursor.fetchall()
+            await cursor.close()
+
+        return [
+            UserCalendar(
+                id=row[0],
+                user_id=row[1],
+                calendar_id=row[2],
+                calendar_name=row[3],
+                calendar_type=row[4],
+                is_readonly=bool(row[5]),
+                is_enabled=bool(row[6]),
+                created_at=row[7],
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    async def get_primary_calendar(user_id: int) -> "UserCalendar | None":
+        """
+        Получает основной календарь пользователя (для записи).
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Основной календарь или None
+        """
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                """
+                SELECT id, user_id, calendar_id, calendar_name, calendar_type, 
+                       is_readonly, is_enabled, created_at
+                FROM user_calendars
+                WHERE user_id = ? AND calendar_type = ? AND is_enabled = 1
+                ORDER BY created_at
+                LIMIT 1
+                """,
+                (user_id, UserCalendar.TYPE_PRIMARY),
+            )
+            row = await cursor.fetchone()
+            await cursor.close()
+
+        if not row:
+            return None
+
+        return UserCalendar(
+            id=row[0],
+            user_id=row[1],
+            calendar_id=row[2],
+            calendar_name=row[3],
+            calendar_type=row[4],
+            is_readonly=bool(row[5]),
+            is_enabled=bool(row[6]),
+            created_at=row[7],
+        )
+
+    @staticmethod
+    async def get_enabled_calendar_ids(user_id: int) -> list[str]:
+        """
+        Получает список ID всех включенных календарей пользователя.
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Список calendar_id
+        """
+        async with aiosqlite.connect(DATABASE_NAME) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                """
+                SELECT calendar_id
+                FROM user_calendars
+                WHERE user_id = ? AND is_enabled = 1
+                ORDER BY calendar_type, created_at
+                """,
+                (user_id,),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+
+        return [row[0] for row in rows]
+
+    @staticmethod
+    async def add_public_calendar(
+        user_id: int, calendar_id: str, calendar_name: str
+    ) -> "UserCalendar":
+        """
+        Добавляет публичный календарь пользователю.
+
+        Args:
+            user_id: ID пользователя
+            calendar_id: ID календаря (например, ru.russian#holiday@group.v.calendar.google.com)
+            calendar_name: Название календаря
+
+        Returns:
+            Созданный календарь
+        """
+        calendar = UserCalendar(
+            user_id=user_id,
+            calendar_id=calendar_id,
+            calendar_name=calendar_name,
+            calendar_type=UserCalendar.TYPE_PUBLIC,
+            is_readonly=True,
+            is_enabled=True,
+        )
+        await calendar.save_to_db()
+        return calendar
+
+
 async def user_exists(user_id):
     async with aiosqlite.connect(DATABASE_NAME) as db:
         cursor = await db.cursor()

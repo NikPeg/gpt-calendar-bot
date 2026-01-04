@@ -201,12 +201,24 @@ class CalendarContext:
         self,
         user_id: int,
         calendar_service: CalendarService,
-        user_email: str,
+        primary_calendar_id: str,
+        all_calendar_ids: list[str],
         timezone_offset: int,
     ):
+        """
+        Инициализирует контекст календаря.
+
+        Args:
+            user_id: ID пользователя
+            calendar_service: Сервис для работы с Google Calendar
+            primary_calendar_id: ID основного календаря (для записи)
+            all_calendar_ids: Список ID всех включенных календарей (для чтения)
+            timezone_offset: Смещение часового пояса пользователя
+        """
         self.user_id = user_id
         self.calendar_service = calendar_service
-        self.user_email = user_email
+        self.primary_calendar_id = primary_calendar_id
+        self.all_calendar_ids = all_calendar_ids
         self.timezone_offset = timezone_offset
 
     @classmethod
@@ -220,6 +232,8 @@ class CalendarContext:
         Returns:
             CalendarContext или None, если не удалось создать
         """
+        from core.database import UserCalendar
+
         # Получаем данные пользователя
         conversation = Conversation(user_id)
         await conversation.get_from_db()
@@ -235,11 +249,30 @@ class CalendarContext:
             logger.error(f"USER{user_id}: Calendar service not configured properly")
             return None
 
-        # Определяем email пользователя
-        user_email = await cls._get_user_email(user_id, conversation, calendar_service)
-        if not user_email:
-            logger.error(f"USER{user_id}: Could not determine user email")
-            return None
+        # Получаем основной календарь
+        primary_calendar = await UserCalendar.get_primary_calendar(user_id)
+        if not primary_calendar:
+            # Если нет записи в user_calendars, пытаемся создать из user_email
+            user_email = await cls._get_user_email(
+                user_id, conversation, calendar_service
+            )
+            if not user_email:
+                logger.error(f"USER{user_id}: Could not determine user email")
+                return None
+
+            # Создаем запись основного календаря
+            primary_calendar = await UserCalendar.add_public_calendar(
+                user_id=user_id,
+                calendar_id=user_email,
+                calendar_name="Основной календарь",
+            )
+            # Меняем тип на primary
+            primary_calendar.calendar_type = UserCalendar.TYPE_PRIMARY
+            primary_calendar.is_readonly = False
+            await primary_calendar.update_in_db()
+
+        # Получаем все включенные календари
+        all_calendar_ids = await UserCalendar.get_enabled_calendar_ids(user_id)
 
         # Определяем часовой пояс
         timezone_offset = (
@@ -248,7 +281,13 @@ class CalendarContext:
             else TIMEZONE_OFFSET
         )
 
-        return cls(user_id, calendar_service, user_email, timezone_offset)
+        return cls(
+            user_id,
+            calendar_service,
+            primary_calendar.calendar_id,
+            all_calendar_ids,
+            timezone_offset,
+        )
 
     @staticmethod
     async def _get_user_email(
@@ -358,8 +397,9 @@ class CreateEventCommand(CalendarCommand):
         if not start_datetime:
             start_datetime = self._get_current_datetime()
 
+        # Создаем событие в основном календаре
         event = self.context.calendar_service.create_event(
-            user_email=self.context.user_email,
+            user_email=self.context.primary_calendar_id,
             summary=summary,
             description=description,
             start_datetime=start_datetime,
@@ -375,15 +415,16 @@ class CreateEventCommand(CalendarCommand):
 
 
 class ListEventsCommand(CalendarCommand):
-    """Команда получения списка событий."""
+    """Команда получения списка событий из всех календарей пользователя."""
 
     async def execute(self) -> str:
         max_results = self.arguments.get("max_results", 10)
         time_min = self._parse_datetime(self.arguments.get("time_min"))
         time_max = self._parse_datetime(self.arguments.get("time_max"))
 
-        events = self.context.calendar_service.list_events(
-            user_email=self.context.user_email,
+        # Получаем события из всех календарей пользователя
+        events = self.context.calendar_service.list_events_from_multiple_calendars(
+            calendar_ids=self.context.all_calendar_ids,
             max_results=max_results,
             time_min=time_min,
             time_max=time_max,
@@ -395,9 +436,23 @@ class ListEventsCommand(CalendarCommand):
         result = f"📅 Найдено событий: {len(events)}\n\n"
         for i, event in enumerate(events, 1):
             summary = event.get("summary", "Без названия")
-            start = event.get("start", {}).get("dateTime", "Время не указано")
+            start = event.get("start", {}).get("dateTime") or event.get("start", {}).get(
+                "date", "Время не указано"
+            )
             event_id = event.get("id", "")
-            result += f"{i}. {summary}\n   Время: {start}\n   ID: {event_id}\n\n"
+            source_calendar = event.get("_source_calendar_id", "")
+
+            result += f"{i}. {summary}\n   Время: {start}\n   ID: {event_id}\n"
+
+            # Добавляем информацию об источнике, если событие не из основного календаря
+            if source_calendar and source_calendar != self.context.primary_calendar_id:
+                # Упрощаем отображение для публичных календарей
+                if "holiday" in source_calendar.lower():
+                    result += "   📌 Праздник\n"
+                elif "public" in source_calendar.lower():
+                    result += "   📌 Публичный календарь\n"
+
+            result += "\n"
 
         return result.strip()
 
@@ -410,8 +465,9 @@ class GetEventCommand(CalendarCommand):
         if not event_id:
             return "❌ Не указан ID события"
 
+        # Пробуем найти событие в основном календаре
         event = self.context.calendar_service.get_event(
-            self.context.user_email, event_id
+            self.context.primary_calendar_id, event_id
         )
 
         if not event:
@@ -424,8 +480,12 @@ class GetEventCommand(CalendarCommand):
         """Форматирует детали события для отображения."""
         summary = event.get("summary", "Без названия")
         description = event.get("description", "")
-        start = event.get("start", {}).get("dateTime", "Время не указано")
-        end = event.get("end", {}).get("dateTime", "Время не указано")
+        start = event.get("start", {}).get("dateTime") or event.get("start", {}).get(
+            "date", "Время не указано"
+        )
+        end = event.get("end", {}).get("dateTime") or event.get("end", {}).get(
+            "date", "Время не указано"
+        )
         location = event.get("location", "")
 
         result = f"📅 {summary}\n\n"
@@ -454,8 +514,9 @@ class UpdateEventCommand(CalendarCommand):
         end_datetime = self._parse_datetime(self.arguments.get("end_datetime"))
         location = self.arguments.get("location")
 
+        # Обновляем событие в основном календаре
         event = self.context.calendar_service.update_event(
-            user_email=self.context.user_email,
+            user_email=self.context.primary_calendar_id,
             event_id=event_id,
             summary=summary,
             description=description,
@@ -477,8 +538,9 @@ class DeleteEventCommand(CalendarCommand):
         if not event_id:
             return "❌ Не указан ID события"
 
+        # Удаляем событие из основного календаря
         success = self.context.calendar_service.delete_event(
-            self.context.user_email, event_id
+            self.context.primary_calendar_id, event_id
         )
 
         if success:

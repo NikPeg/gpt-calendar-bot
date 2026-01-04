@@ -205,7 +205,8 @@ async def execute_calendar_function(
             # Если время не указано, используем текущее время
             if not start_datetime:
                 now = datetime.now(timezone(timedelta(hours=TIMEZONE_OFFSET)))
-                start_datetime = now.isoformat()
+                # Форматируем в RFC3339 для Google Calendar API
+                start_datetime = now.isoformat().replace("+00:00", "Z")
 
             event = calendar_service.create_event(
                 user_email=user_email,

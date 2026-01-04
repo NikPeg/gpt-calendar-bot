@@ -46,7 +46,9 @@ async def send_request_to_openrouter(
 
     delay = 1
     # HTTP статусы, для которых стоит делать retry (серверные ошибки и rate limit)
+    # 400 и 404 не ретраим - это ошибки клиента, повтор не поможет
     retryable_statuses = {429, 500, 502, 503, 504}
+    non_retryable_statuses = {400, 404}
 
     for attempt in range(1, retries + 1):
         try:
@@ -54,6 +56,14 @@ async def send_request_to_openrouter(
                 aiohttp.ClientSession() as session,
                 session.post(url, headers=headers, data=json.dumps(data)) as response,
             ):
+                # Для неретраируемых статусов (400, 404) сразу возвращаем ошибку
+                if response.status in non_retryable_statuses:
+                    error_text = await response.text()
+                    logger.error(
+                        f"HTTP {response.status} (non-retryable): {response.reason}. Response: {error_text}"
+                    )
+                    return None
+
                 # Для retryable статусов делаем retry
                 if response.status in retryable_statuses:
                     if attempt < retries:
@@ -89,6 +99,11 @@ async def send_request_to_openrouter(
 
         except aiohttp.ClientResponseError as e:
             # Этот блок ловит ошибки от raise_for_status() для других статус-кодов
+            # Не ретраим 400 и 404 ошибки
+            if e.status in non_retryable_statuses:
+                logger.error(f"HTTP {e.status} (non-retryable): {e}")
+                return None
+            # Для других ошибок делаем retry
             if attempt < retries:
                 logger.info(
                     f"HTTP error, попытка {attempt}/{retries}: {e}. Жду {delay} сек..."

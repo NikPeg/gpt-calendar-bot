@@ -57,6 +57,26 @@ class CalendarService:
         """Проверяет, настроен ли сервисный аккаунт."""
         return self.service is not None
 
+    @staticmethod
+    def _ensure_rfc3339_format(datetime_str: str) -> str:
+        """
+        Убеждается, что дата в формате RFC3339 с timezone для Google Calendar API.
+
+        Args:
+            datetime_str: Строка с датой в формате ISO 8601
+
+        Returns:
+            Строка в формате RFC3339
+        """
+        # Если уже есть Z или timezone, возвращаем как есть
+        if "Z" in datetime_str or "+" in datetime_str or datetime_str.count("-") > 2:
+            # Заменяем +00:00 на Z для UTC
+            return datetime_str.replace("+00:00", "Z")
+        # Если нет timezone, добавляем Z (предполагаем UTC)
+        if "T" in datetime_str:
+            return datetime_str + "Z"
+        return datetime_str
+
     def get_calendar_id(self, user_email: str) -> str | None:
         """
         Получает ID календаря пользователя.
@@ -217,14 +237,16 @@ class CalendarService:
             }
 
             if time_min:
-                params["timeMin"] = time_min
+                # Убеждаемся, что дата в формате RFC3339 с timezone
+                params["timeMin"] = self._ensure_rfc3339_format(time_min)
             else:
                 # По умолчанию показываем события с текущего момента
-                now = datetime.now(UTC).isoformat()
-                params["timeMin"] = now
+                now = datetime.now(UTC)
+                params["timeMin"] = now.isoformat().replace("+00:00", "Z")
 
             if time_max:
-                params["timeMax"] = time_max
+                # Убеждаемся, что дата в формате RFC3339 с timezone
+                params["timeMax"] = self._ensure_rfc3339_format(time_max)
 
             # Получаем события
             events_result = (

@@ -38,6 +38,7 @@ class Conversation:
         subscription_verified=None,
         referral_code=None,
         service_account_json=None,
+        user_email=None,
     ):
         self.id = id
         self.name = name
@@ -45,14 +46,15 @@ class Conversation:
         self.subscription_verified = subscription_verified
         self.referral_code = referral_code
         self.service_account_json = service_account_json
+        self.user_email = user_email
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None}, user_email={self.user_email})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -62,11 +64,12 @@ class Conversation:
                 self.subscription_verified = row[3]
                 self.referral_code = row[4]
                 self.service_account_json = row[5] if len(row) > 5 else None
+                self.user_email = row[6] if len(row) > 6 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -77,6 +80,7 @@ class Conversation:
                     subscription_verified=row[3],
                     referral_code=row[4],
                     service_account_json=row[5] if len(row) > 5 else None,
+                    user_email=row[6] if len(row) > 6 else None,
                 )
             return None
 
@@ -92,8 +96,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -102,6 +106,7 @@ class Conversation:
                 self.subscription_verified,
                 self.referral_code,
                 self.service_account_json,
+                self.user_email,
             )
             await cursor.execute(sql_insert, values)
             await db.commit()
@@ -193,7 +198,7 @@ class Conversation:
             cursor = await db.cursor()
             sql_query = """
                 UPDATE conversations
-                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?
+                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?, user_email = ?
                 WHERE id = ?
             """
             values = (
@@ -202,6 +207,7 @@ class Conversation:
                 self.subscription_verified,
                 self.referral_code,
                 self.service_account_json,
+                self.user_email,
                 self.id,
             )
             await cursor.execute(sql_query, values)
@@ -361,7 +367,7 @@ async def check_db():
                 )
                 """
             )
-            
+
             # Таблица messages - история сообщений
             await cursor.execute(
                 """
@@ -375,7 +381,7 @@ async def check_db():
                 )
                 """
             )
-            
+
             # Таблица chat_verifications - верификация подписки для чатов
             await cursor.execute(
                 """

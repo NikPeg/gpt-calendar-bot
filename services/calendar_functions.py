@@ -161,36 +161,79 @@ async def execute_calendar_function(
 ) -> str:
     """
     Выполняет функцию работы с календарем.
-    
+
     Args:
         function_name: Название функции
         arguments: Аргументы функции
         user_id: ID пользователя
-        
+
     Returns:
         Результат выполнения функции в виде строки
     """
     # Получаем данные пользователя
     conversation = Conversation(user_id)
     await conversation.get_from_db()
-    
+
     if not conversation.service_account_json:
-        return "❌ Календарь не настроен. Пожалуйста, настройте календарь командой /start"
-    
+        return (
+            "❌ Календарь не настроен. Пожалуйста, настройте календарь командой /start"
+        )
+
     # Создаем сервис календаря
     calendar_service = CalendarService(conversation.service_account_json)
-    
+
     if not calendar_service.is_configured():
         return "❌ Ошибка доступа к календарю. Пожалуйста, проверьте настройки."
-    
-    # Получаем email пользователя из JSON
+
+    # Получаем email пользователя из базы данных
+    # Если email не сохранен, пытаемся определить автоматически
     try:
-        service_account_data = json.loads(conversation.service_account_json)
-        user_email = service_account_data.get("client_email", "")
+        user_email = conversation.user_email
+
+        # Если email не сохранен, пытаемся определить из доступных календарей
+        if not user_email:
+            logger.warning(
+                f"USER{user_id}: user_email not found in database, trying to detect automatically"
+            )
+            service_account_data = json.loads(conversation.service_account_json)
+            service_account_email = service_account_data.get("client_email", "")
+
+            try:
+                # Получаем список доступных календарей
+                calendar_list = calendar_service.service.calendarList().list().execute()
+                calendars = calendar_list.get("items", [])
+
+                # Ищем календарь пользователя (Gmail календари обычно имеют email как ID)
+                for cal in calendars:
+                    cal_id = cal.get("id", "")
+                    # Если ID календаря - это Gmail адрес (не сервисный аккаунт)
+                    if (
+                        "@gmail.com" in cal_id.lower()
+                        and service_account_email.lower() not in cal_id.lower()
+                    ):
+                        user_email = cal_id
+                        logger.info(
+                            f"USER{user_id}: Auto-detected user email: {user_email}"
+                        )
+                        # Сохраняем найденный email в БД
+                        conversation.user_email = user_email
+                        await conversation.update_in_db()
+                        break
+            except Exception as e:
+                logger.debug(f"Could not detect user email from calendar list: {e}")
+
+            # Если не нашли, используем email сервисного аккаунта
+            if not user_email:
+                user_email = service_account_email
+                logger.warning(
+                    f"USER{user_id}: Using service account email as fallback: {user_email}"
+                )
+        else:
+            logger.debug(f"USER{user_id}: Using saved user email: {user_email}")
     except Exception as e:
-        logger.error(f"Error parsing service account JSON: {e}")
+        logger.error(f"Error getting user email: {e}")
         return "❌ Ошибка при обработке данных сервисного аккаунта"
-    
+
     try:
         if function_name == "create_calendar_event":
             summary = arguments.get("summary", "")
@@ -313,6 +356,7 @@ async def execute_calendar_function(
         return f"❌ Неизвестная функция: {function_name}"
 
     except Exception as e:
-        logger.error(f"Error executing calendar function {function_name}: {e}", exc_info=True)
+        logger.error(
+            f"Error executing calendar function {function_name}: {e}", exc_info=True
+        )
         return f"❌ Произошла ошибка при выполнении операции: {str(e)}"
-

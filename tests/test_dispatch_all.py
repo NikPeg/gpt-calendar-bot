@@ -26,7 +26,7 @@ async def test_db():
     if os.path.exists(test_db_name):
         os.remove(test_db_name)
 
-    # Создаем БД и таблицы
+    # Создаем БД и таблицы с актуальной схемой (включая миграции)
     async with aiosqlite.connect(test_db_name) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
@@ -34,7 +34,10 @@ async def test_db():
                 name TEXT,
                 active_messages_count INTEGER,
                 subscription_verified INTEGER,
-                referral_code TEXT DEFAULT NULL
+                referral_code TEXT DEFAULT NULL,
+                service_account_json TEXT DEFAULT NULL,
+                user_email TEXT DEFAULT NULL,
+                timezone_offset INTEGER DEFAULT NULL
             )
         """)
 

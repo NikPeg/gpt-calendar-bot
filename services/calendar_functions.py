@@ -1,9 +1,12 @@
 """
 Функции для работы с Google Calendar через Function Calling.
+Реализация на основе паттерна Command для чистой архитектуры.
 """
 
 import json
+from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
 from core.config import TIMEZONE_OFFSET, logger
 from core.database import Conversation
@@ -128,49 +131,391 @@ CALENDAR_FUNCTIONS = [
 ]
 
 
-def parse_datetime(
-    datetime_str: str | None, user_timezone_offset: int | None = None
-) -> str | None:
-    """
-    Парсит строку с датой/временем в ISO 8601 формат.
-    Поддерживает относительные времена (например, "через 2 часа", "завтра в 15:00").
+class DateTimeParser:
+    """Парсер дат и времени с поддержкой часовых поясов."""
 
-    Если datetime_str не содержит информацию о часовом поясе, предполагается,
-    что время указано в часовом поясе пользователя и конвертируется в UTC.
+    @staticmethod
+    def parse(
+        datetime_str: str | None, user_timezone_offset: int | None = None
+    ) -> str | None:
+        """
+        Парсит строку с датой/временем в ISO 8601 формат.
+        Поддерживает относительные времена (например, "через 2 часа", "завтра в 15:00").
 
-    Args:
-        datetime_str: Строка с датой/временем
-        user_timezone_offset: Смещение часового пояса пользователя от UTC (опционально)
+        Если datetime_str не содержит информацию о часовом поясе, предполагается,
+        что время указано в часовом поясе пользователя и конвертируется в UTC.
 
-    Returns:
-        ISO 8601 строка в UTC или None
-    """
-    if not datetime_str:
+        Args:
+            datetime_str: Строка с датой/временем
+            user_timezone_offset: Смещение часового пояса пользователя от UTC (опционально)
+
+        Returns:
+            ISO 8601 строка в UTC или None
+        """
+        if not datetime_str:
+            return None
+
+        # Если уже в формате ISO 8601 с timezone, возвращаем как есть
+        try:
+            dt = datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
+            # Если datetime уже имеет timezone, возвращаем как есть
+            if dt.tzinfo is not None:
+                # Конвертируем в UTC
+                dt_utc = dt.astimezone(UTC)
+                return dt_utc.isoformat().replace("+00:00", "Z")
+            # Если нет timezone, предполагаем что это время пользователя
+            if user_timezone_offset is not None:
+                user_tz = timezone(timedelta(hours=user_timezone_offset))
+                dt = dt.replace(tzinfo=user_tz)
+                dt_utc = dt.astimezone(UTC)
+                return dt_utc.isoformat().replace("+00:00", "Z")
+            return datetime_str
+        except (ValueError, AttributeError):
+            pass
+
+        # TODO: Добавить парсинг относительных времен
+        # Пока просто возвращаем None для относительных времен
+        # В будущем можно добавить библиотеку для парсинга естественного языка
+
         return None
 
-    # Если уже в формате ISO 8601 с timezone, возвращаем как есть
-    try:
-        dt = datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
-        # Если datetime уже имеет timezone, возвращаем как есть
-        if dt.tzinfo is not None:
-            # Конвертируем в UTC
-            dt_utc = dt.astimezone(UTC)
-            return dt_utc.isoformat().replace("+00:00", "Z")
-        # Если нет timezone, предполагаем что это время пользователя
-        if user_timezone_offset is not None:
-            user_tz = timezone(timedelta(hours=user_timezone_offset))
-            dt = dt.replace(tzinfo=user_tz)
-            dt_utc = dt.astimezone(UTC)
-            return dt_utc.isoformat().replace("+00:00", "Z")
-        return datetime_str
-    except (ValueError, AttributeError):
-        pass
+    @staticmethod
+    def get_current_datetime_for_user(user_timezone_offset: int) -> str:
+        """
+        Возвращает текущее время в формате ISO для указанного часового пояса.
 
-    # TODO: Добавить парсинг относительных времен
-    # Пока просто возвращаем None для относительных времен
-    # В будущем можно добавить библиотеку для парсинга естественного языка
+        Args:
+            user_timezone_offset: Смещение часового пояса от UTC
 
-    return None
+        Returns:
+            Текущее время в формате ISO
+        """
+        now = datetime.now(timezone(timedelta(hours=user_timezone_offset)))
+        return now.isoformat().replace("+00:00", "Z")
+
+
+class CalendarContext:
+    """Контекст выполнения операций с календарем."""
+
+    def __init__(
+        self,
+        user_id: int,
+        calendar_service: CalendarService,
+        user_email: str,
+        timezone_offset: int,
+    ):
+        self.user_id = user_id
+        self.calendar_service = calendar_service
+        self.user_email = user_email
+        self.timezone_offset = timezone_offset
+
+    @classmethod
+    async def create(cls, user_id: int) -> "CalendarContext | None":
+        """
+        Создает контекст из данных пользователя.
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            CalendarContext или None, если не удалось создать
+        """
+        # Получаем данные пользователя
+        conversation = Conversation(user_id)
+        await conversation.get_from_db()
+
+        if not conversation.service_account_json:
+            logger.error(f"USER{user_id}: Service account not configured")
+            return None
+
+        # Создаем сервис календаря
+        calendar_service = CalendarService(conversation.service_account_json)
+
+        if not calendar_service.is_configured():
+            logger.error(f"USER{user_id}: Calendar service not configured properly")
+            return None
+
+        # Определяем email пользователя
+        user_email = await cls._get_user_email(user_id, conversation, calendar_service)
+        if not user_email:
+            logger.error(f"USER{user_id}: Could not determine user email")
+            return None
+
+        # Определяем часовой пояс
+        timezone_offset = (
+            conversation.timezone_offset
+            if conversation.timezone_offset is not None
+            else TIMEZONE_OFFSET
+        )
+
+        return cls(user_id, calendar_service, user_email, timezone_offset)
+
+    @staticmethod
+    async def _get_user_email(
+        user_id: int, conversation: Conversation, calendar_service: CalendarService
+    ) -> str | None:
+        """
+        Определяет email пользователя.
+
+        Args:
+            user_id: ID пользователя
+            conversation: Объект разговора с пользователем
+            calendar_service: Сервис календаря
+
+        Returns:
+            Email пользователя или None
+        """
+        try:
+            user_email = conversation.user_email
+
+            # Если email не сохранен, пытаемся определить из доступных календарей
+            if not user_email:
+                logger.warning(
+                    f"USER{user_id}: user_email not found in database, trying to detect automatically"
+                )
+                service_account_data = json.loads(conversation.service_account_json)
+                service_account_email = service_account_data.get("client_email", "")
+
+                try:
+                    # Получаем список доступных календарей
+                    calendar_list = (
+                        calendar_service.service.calendarList().list().execute()
+                    )
+                    calendars = calendar_list.get("items", [])
+
+                    # Ищем календарь пользователя (Gmail календари обычно имеют email как ID)
+                    for cal in calendars:
+                        cal_id = cal.get("id", "")
+                        # Если ID календаря - это Gmail адрес (не сервисный аккаунт)
+                        if (
+                            "@gmail.com" in cal_id.lower()
+                            and service_account_email.lower() not in cal_id.lower()
+                        ):
+                            user_email = cal_id
+                            logger.info(
+                                f"USER{user_id}: Auto-detected user email: {user_email}"
+                            )
+                            # Сохраняем найденный email в БД
+                            conversation.user_email = user_email
+                            await conversation.update_in_db()
+                            break
+                except Exception as e:
+                    logger.debug(f"Could not detect user email from calendar list: {e}")
+
+                # Если не нашли, используем email сервисного аккаунта
+                if not user_email:
+                    user_email = service_account_email
+                    logger.warning(
+                        f"USER{user_id}: Using service account email as fallback: {user_email}"
+                    )
+            else:
+                logger.debug(f"USER{user_id}: Using saved user email: {user_email}")
+
+            return user_email
+        except Exception as e:
+            logger.error(f"Error getting user email: {e}")
+            return None
+
+
+class CalendarCommand(ABC):
+    """Абстрактный базовый класс для команд работы с календарем."""
+
+    def __init__(self, context: CalendarContext, arguments: dict[str, Any]):
+        self.context = context
+        self.arguments = arguments
+        self.datetime_parser = DateTimeParser()
+
+    @abstractmethod
+    async def execute(self) -> str:
+        """Выполняет команду и возвращает результат."""
+        ...
+
+    def _parse_datetime(self, datetime_str: str | None) -> str | None:
+        """Парсит дату/время с учетом часового пояса пользователя."""
+        return self.datetime_parser.parse(datetime_str, self.context.timezone_offset)
+
+    def _get_current_datetime(self) -> str:
+        """Возвращает текущее время для пользователя."""
+        return self.datetime_parser.get_current_datetime_for_user(
+            self.context.timezone_offset
+        )
+
+
+class CreateEventCommand(CalendarCommand):
+    """Команда создания события в календаре."""
+
+    async def execute(self) -> str:
+        summary = self.arguments.get("summary", "")
+        if not summary:
+            return "❌ Не указано название события"
+
+        description = self.arguments.get("description")
+        start_datetime = self._parse_datetime(self.arguments.get("start_datetime"))
+        end_datetime = self._parse_datetime(self.arguments.get("end_datetime"))
+        location = self.arguments.get("location")
+
+        # Если время не указано, используем текущее время
+        if not start_datetime:
+            start_datetime = self._get_current_datetime()
+
+        event = self.context.calendar_service.create_event(
+            user_email=self.context.user_email,
+            summary=summary,
+            description=description,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            location=location,
+        )
+
+        if event:
+            event_id = event.get("id", "")
+            start = event.get("start", {}).get("dateTime", "")
+            return f"✅ Событие создано успешно!\n\nID: {event_id}\nВремя: {start}"
+        return "❌ Не удалось создать событие"
+
+
+class ListEventsCommand(CalendarCommand):
+    """Команда получения списка событий."""
+
+    async def execute(self) -> str:
+        max_results = self.arguments.get("max_results", 10)
+        time_min = self._parse_datetime(self.arguments.get("time_min"))
+        time_max = self._parse_datetime(self.arguments.get("time_max"))
+
+        events = self.context.calendar_service.list_events(
+            user_email=self.context.user_email,
+            max_results=max_results,
+            time_min=time_min,
+            time_max=time_max,
+        )
+
+        if not events:
+            return "📅 Событий не найдено"
+
+        result = f"📅 Найдено событий: {len(events)}\n\n"
+        for i, event in enumerate(events, 1):
+            summary = event.get("summary", "Без названия")
+            start = event.get("start", {}).get("dateTime", "Время не указано")
+            event_id = event.get("id", "")
+            result += f"{i}. {summary}\n   Время: {start}\n   ID: {event_id}\n\n"
+
+        return result.strip()
+
+
+class GetEventCommand(CalendarCommand):
+    """Команда получения информации о событии."""
+
+    async def execute(self) -> str:
+        event_id = self.arguments.get("event_id")
+        if not event_id:
+            return "❌ Не указан ID события"
+
+        event = self.context.calendar_service.get_event(
+            self.context.user_email, event_id
+        )
+
+        if not event:
+            return f"❌ Событие с ID {event_id} не найдено"
+
+        return self._format_event_details(event, event_id)
+
+    @staticmethod
+    def _format_event_details(event: dict[str, Any], event_id: str) -> str:
+        """Форматирует детали события для отображения."""
+        summary = event.get("summary", "Без названия")
+        description = event.get("description", "")
+        start = event.get("start", {}).get("dateTime", "Время не указано")
+        end = event.get("end", {}).get("dateTime", "Время не указано")
+        location = event.get("location", "")
+
+        result = f"📅 {summary}\n\n"
+        if description:
+            result += f"Описание: {description}\n"
+        result += f"Начало: {start}\n"
+        result += f"Окончание: {end}\n"
+        if location:
+            result += f"Место: {location}\n"
+        result += f"\nID: {event_id}"
+
+        return result
+
+
+class UpdateEventCommand(CalendarCommand):
+    """Команда обновления события."""
+
+    async def execute(self) -> str:
+        event_id = self.arguments.get("event_id")
+        if not event_id:
+            return "❌ Не указан ID события"
+
+        summary = self.arguments.get("summary")
+        description = self.arguments.get("description")
+        start_datetime = self._parse_datetime(self.arguments.get("start_datetime"))
+        end_datetime = self._parse_datetime(self.arguments.get("end_datetime"))
+        location = self.arguments.get("location")
+
+        event = self.context.calendar_service.update_event(
+            user_email=self.context.user_email,
+            event_id=event_id,
+            summary=summary,
+            description=description,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            location=location,
+        )
+
+        if event:
+            return f"✅ Событие обновлено успешно!\n\nID: {event_id}"
+        return f"❌ Не удалось обновить событие с ID {event_id}"
+
+
+class DeleteEventCommand(CalendarCommand):
+    """Команда удаления события."""
+
+    async def execute(self) -> str:
+        event_id = self.arguments.get("event_id")
+        if not event_id:
+            return "❌ Не указан ID события"
+
+        success = self.context.calendar_service.delete_event(
+            self.context.user_email, event_id
+        )
+
+        if success:
+            return f"✅ Событие удалено успешно!\n\nID: {event_id}"
+        return f"❌ Не удалось удалить событие с ID {event_id}"
+
+
+class CalendarCommandFactory:
+    """Фабрика для создания команд работы с календарем."""
+
+    _commands: dict[str, type[CalendarCommand]] = {
+        "create_calendar_event": CreateEventCommand,
+        "list_calendar_events": ListEventsCommand,
+        "get_calendar_event": GetEventCommand,
+        "update_calendar_event": UpdateEventCommand,
+        "delete_calendar_event": DeleteEventCommand,
+    }
+
+    @classmethod
+    def create(
+        cls, function_name: str, context: CalendarContext, arguments: dict[str, Any]
+    ) -> CalendarCommand | None:
+        """
+        Создает команду по имени функции.
+
+        Args:
+            function_name: Название функции
+            context: Контекст выполнения
+            arguments: Аргументы команды
+
+        Returns:
+            Экземпляр команды или None, если команда не найдена
+        """
+        command_class = cls._commands.get(function_name)
+        if command_class:
+            return command_class(context, arguments)
+        return None
 
 
 async def execute_calendar_function(
@@ -187,222 +532,39 @@ async def execute_calendar_function(
     Returns:
         Результат выполнения функции в виде строки
     """
-    # Получаем данные пользователя
-    conversation = Conversation(user_id)
-    await conversation.get_from_db()
-
-    if not conversation.service_account_json:
-        return (
-            "❌ Календарь не настроен. Пожалуйста, настройте календарь командой /start"
-        )
-
-    # Создаем сервис календаря
-    calendar_service = CalendarService(conversation.service_account_json)
-
-    if not calendar_service.is_configured():
-        return "❌ Ошибка доступа к календарю. Пожалуйста, проверьте настройки."
-
-    # Получаем email пользователя из базы данных
-    # Если email не сохранен, пытаемся определить автоматически
     try:
-        user_email = conversation.user_email
+        # Создаем контекст
+        context = await CalendarContext.create(user_id)
+        if not context:
+            return "❌ Календарь не настроен. Пожалуйста, настройте календарь командой /start"
 
-        # Если email не сохранен, пытаемся определить из доступных календарей
-        if not user_email:
-            logger.warning(
-                f"USER{user_id}: user_email not found in database, trying to detect automatically"
-            )
-            service_account_data = json.loads(conversation.service_account_json)
-            service_account_email = service_account_data.get("client_email", "")
+        # Создаем и выполняем команду
+        command = CalendarCommandFactory.create(function_name, context, arguments)
+        if not command:
+            return f"❌ Неизвестная функция: {function_name}"
 
-            try:
-                # Получаем список доступных календарей
-                calendar_list = calendar_service.service.calendarList().list().execute()
-                calendars = calendar_list.get("items", [])
-
-                # Ищем календарь пользователя (Gmail календари обычно имеют email как ID)
-                for cal in calendars:
-                    cal_id = cal.get("id", "")
-                    # Если ID календаря - это Gmail адрес (не сервисный аккаунт)
-                    if (
-                        "@gmail.com" in cal_id.lower()
-                        and service_account_email.lower() not in cal_id.lower()
-                    ):
-                        user_email = cal_id
-                        logger.info(
-                            f"USER{user_id}: Auto-detected user email: {user_email}"
-                        )
-                        # Сохраняем найденный email в БД
-                        conversation.user_email = user_email
-                        await conversation.update_in_db()
-                        break
-            except Exception as e:
-                logger.debug(f"Could not detect user email from calendar list: {e}")
-
-            # Если не нашли, используем email сервисного аккаунта
-            if not user_email:
-                user_email = service_account_email
-                logger.warning(
-                    f"USER{user_id}: Using service account email as fallback: {user_email}"
-                )
-        else:
-            logger.debug(f"USER{user_id}: Using saved user email: {user_email}")
-    except Exception as e:
-        logger.error(f"Error getting user email: {e}")
-        return "❌ Ошибка при обработке данных сервисного аккаунта"
-
-    try:
-        if function_name == "create_calendar_event":
-            summary = arguments.get("summary", "")
-            if not summary:
-                return "❌ Не указано название события"
-
-            description = arguments.get("description")
-            user_timezone_offset = (
-                conversation.timezone_offset
-                if conversation.timezone_offset is not None
-                else TIMEZONE_OFFSET
-            )
-            start_datetime = parse_datetime(
-                arguments.get("start_datetime"), user_timezone_offset
-            )
-            end_datetime = parse_datetime(
-                arguments.get("end_datetime"), user_timezone_offset
-            )
-            location = arguments.get("location")
-
-            # Если время не указано, используем текущее время
-            if not start_datetime:
-                # Используем персональный часовой пояс пользователя или значение по умолчанию
-                user_timezone_offset = (
-                    conversation.timezone_offset
-                    if conversation.timezone_offset is not None
-                    else TIMEZONE_OFFSET
-                )
-                now = datetime.now(timezone(timedelta(hours=user_timezone_offset)))
-                # Форматируем в RFC3339 для Google Calendar API
-                start_datetime = now.isoformat().replace("+00:00", "Z")
-
-            event = calendar_service.create_event(
-                user_email=user_email,
-                summary=summary,
-                description=description,
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-                location=location,
-            )
-
-            if event:
-                event_id = event.get("id", "")
-                start = event.get("start", {}).get("dateTime", "")
-                return f"✅ Событие создано успешно!\n\nID: {event_id}\nВремя: {start}"
-            return "❌ Не удалось создать событие"
-
-        if function_name == "list_calendar_events":
-            max_results = arguments.get("max_results", 10)
-            user_timezone_offset = (
-                conversation.timezone_offset
-                if conversation.timezone_offset is not None
-                else TIMEZONE_OFFSET
-            )
-            time_min = parse_datetime(arguments.get("time_min"), user_timezone_offset)
-            time_max = parse_datetime(arguments.get("time_max"), user_timezone_offset)
-
-            events = calendar_service.list_events(
-                user_email=user_email,
-                max_results=max_results,
-                time_min=time_min,
-                time_max=time_max,
-            )
-
-            if not events:
-                return "📅 Событий не найдено"
-
-            result = f"📅 Найдено событий: {len(events)}\n\n"
-            for i, event in enumerate(events, 1):
-                summary = event.get("summary", "Без названия")
-                start = event.get("start", {}).get("dateTime", "Время не указано")
-                event_id = event.get("id", "")
-                result += f"{i}. {summary}\n   Время: {start}\n   ID: {event_id}\n\n"
-
-            return result.strip()
-
-        if function_name == "get_calendar_event":
-            event_id = arguments.get("event_id")
-            if not event_id:
-                return "❌ Не указан ID события"
-
-            event = calendar_service.get_event(user_email, event_id)
-
-            if not event:
-                return f"❌ Событие с ID {event_id} не найдено"
-
-            summary = event.get("summary", "Без названия")
-            description = event.get("description", "")
-            start = event.get("start", {}).get("dateTime", "Время не указано")
-            end = event.get("end", {}).get("dateTime", "Время не указано")
-            location = event.get("location", "")
-
-            result = f"📅 {summary}\n\n"
-            if description:
-                result += f"Описание: {description}\n"
-            result += f"Начало: {start}\n"
-            result += f"Окончание: {end}\n"
-            if location:
-                result += f"Место: {location}\n"
-            result += f"\nID: {event_id}"
-
-            return result
-
-        if function_name == "update_calendar_event":
-            event_id = arguments.get("event_id")
-            if not event_id:
-                return "❌ Не указан ID события"
-
-            summary = arguments.get("summary")
-            description = arguments.get("description")
-            user_timezone_offset = (
-                conversation.timezone_offset
-                if conversation.timezone_offset is not None
-                else TIMEZONE_OFFSET
-            )
-            start_datetime = parse_datetime(
-                arguments.get("start_datetime"), user_timezone_offset
-            )
-            end_datetime = parse_datetime(
-                arguments.get("end_datetime"), user_timezone_offset
-            )
-            location = arguments.get("location")
-
-            event = calendar_service.update_event(
-                user_email=user_email,
-                event_id=event_id,
-                summary=summary,
-                description=description,
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-                location=location,
-            )
-
-            if event:
-                return f"✅ Событие обновлено успешно!\n\nID: {event_id}"
-            return f"❌ Не удалось обновить событие с ID {event_id}"
-
-        if function_name == "delete_calendar_event":
-            event_id = arguments.get("event_id")
-            if not event_id:
-                return "❌ Не указан ID события"
-
-            success = calendar_service.delete_event(user_email, event_id)
-
-            if success:
-                return f"✅ Событие удалено успешно!\n\nID: {event_id}"
-            return f"❌ Не удалось удалить событие с ID {event_id}"
-
-        return f"❌ Неизвестная функция: {function_name}"
+        return await command.execute()
 
     except Exception as e:
         logger.error(
             f"Error executing calendar function {function_name}: {e}", exc_info=True
         )
         return f"❌ Произошла ошибка при выполнении операции: {str(e)}"
+
+
+# Для обратной совместимости экспортируем parse_datetime
+def parse_datetime(
+    datetime_str: str | None, user_timezone_offset: int | None = None
+) -> str | None:
+    """
+    Парсит строку с датой/временем в ISO 8601 формат.
+    Обертка над DateTimeParser для обратной совместимости.
+
+    Args:
+        datetime_str: Строка с датой/временем
+        user_timezone_offset: Смещение часового пояса пользователя от UTC (опционально)
+
+    Returns:
+        ISO 8601 строка в UTC или None
+    """
+    return DateTimeParser.parse(datetime_str, user_timezone_offset)

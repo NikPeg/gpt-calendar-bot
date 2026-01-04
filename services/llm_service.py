@@ -109,6 +109,12 @@ async def get_llm_response(
             "- get_calendar_event: получение информации о событии\n"
             "- update_calendar_event: изменение событий\n"
             "- delete_calendar_event: удаление событий\n\n"
+            "КРИТИЧЕСКИ ВАЖНО для работы с календарем:\n"
+            "1. Для удаления или изменения события ВСЕГДА сначала используй list_calendar_events для получения списка событий\n"
+            "2. Найди нужное событие в списке и возьми его реальный ID (это уникальная строка типа 'abc123xyz')\n"
+            "3. Используй delete_calendar_event или update_calendar_event с полученным ID\n"
+            "4. НИКОГДА не используй название события (например, 'Обед') как event_id - это должен быть реальный ID из списка событий!\n"
+            "5. Ты можешь делать несколько вызовов функций подряд: сначала list_calendar_events, затем delete_calendar_event\n\n"
             "Используй эти функции для управления календарем пользователя."
         )
         system_content += calendar_info
@@ -166,16 +172,22 @@ async def get_llm_response(
 
 
 async def _process_llm_response(
-    response: dict, chat_id: int, prompt: list[dict], functions: list[dict] | None
+    response: dict,
+    chat_id: int,
+    prompt: list[dict],
+    functions: list[dict] | None,
+    max_iterations: int = 3,
 ) -> str | None:
     """
     Обрабатывает ответ от LLM, включая function calling.
+    Поддерживает цепочку вызовов функций (до max_iterations раз).
 
     Args:
         response: Ответ от LLM (объект message)
         chat_id: ID чата
         prompt: Текущий промпт
         functions: Список доступных функций
+        max_iterations: Максимальное количество циклов вызовов функций (по умолчанию 3)
 
     Returns:
         Текст ответа для пользователя
@@ -183,10 +195,20 @@ async def _process_llm_response(
     if not response:
         return None
 
-    # Проверяем, есть ли tool_calls (function calling)
-    tool_calls = response.get("tool_calls")
+    iteration = 0
+    current_response = response
 
-    if tool_calls and functions:
+    while iteration < max_iterations:
+        # Проверяем, есть ли tool_calls (function calling)
+        tool_calls = current_response.get("tool_calls")
+
+        if not tool_calls or not functions:
+            # Нет вызовов функций - возвращаем контент
+            content = current_response.get("content")
+            if content:
+                return content
+            return None
+
         # Обрабатываем function calling
         function_results = []
 
@@ -208,7 +230,7 @@ async def _process_llm_response(
                 continue
 
             logger.info(
-                f"LLM{chat_id}: Calling function {function_name} with args: {function_args}"
+                f"LLM{chat_id}: Calling function {function_name} with args: {function_args} (iteration {iteration + 1}/{max_iterations})"
             )
 
             # Выполняем функцию
@@ -224,35 +246,52 @@ async def _process_llm_response(
                 }
             )
 
-        # Добавляем результаты функций в промпт и запрашиваем финальный ответ
-        prompt.append(response)  # Добавляем сообщение с tool_calls
+        # Добавляем результаты функций в промпт
+        prompt.append(current_response)  # Добавляем сообщение с tool_calls
         prompt.extend(function_results)  # Добавляем результаты функций
 
-        # Запрашиваем финальный ответ от LLM
+        # Запрашиваем следующий ответ от LLM
         try:
-            final_response = await send_request_to_openrouter(
+            next_response = await send_request_to_openrouter(
                 prompt,
                 functions=functions,
-                function_call="none",  # Не вызываем функции снова
+                function_call="auto",  # Разрешаем дополнительные вызовы функций
             )
 
-            if final_response and isinstance(final_response, dict):
-                content = final_response.get("content")
-                if content:
-                    return content
+            if not next_response or not isinstance(next_response, dict):
+                logger.warning(
+                    f"LLM{chat_id}: Invalid response at iteration {iteration + 1}"
+                )
+                # Возвращаем результаты функций напрямую
+                if function_results:
+                    return "\n\n".join([r["content"] for r in function_results])
+                return None
+
+            current_response = next_response
+            iteration += 1
+
         except Exception as e:
             logger.error(
-                f"Error getting final response after function call: {e}", exc_info=True
+                f"LLM{chat_id}: Error getting response at iteration {iteration + 1}: {e}",
+                exc_info=True,
             )
             # Возвращаем результаты функций напрямую
             if function_results:
                 return "\n\n".join([r["content"] for r in function_results])
+            return None
 
-    # Обычный текстовый ответ
-    content = response.get("content")
+    # Если достигли лимита итераций
+    logger.warning(
+        f"LLM{chat_id}: Reached max iterations ({max_iterations}), returning last response"
+    )
+    content = current_response.get("content")
     if content:
         return content
 
+    # Если контента нет, но были вызовы функций - это странная ситуация
+    logger.warning(
+        f"LLM{chat_id}: No content in final response after {max_iterations} iterations"
+    )
     return None
 
 

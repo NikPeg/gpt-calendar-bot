@@ -250,3 +250,84 @@ async def cmd_forget(message: types.Message):
     if message.chat.id != ADMIN_CHAT:
         await forward_to_debug(message.chat.id, message.message_id)
         await forward_to_debug(message.chat.id, sent_msg.message_id)
+
+
+@dp.message(Command("timezone"))
+async def cmd_timezone(message: types.Message):
+    """
+    Команда /timezone - установка часового пояса пользователя.
+    Использование: /timezone <offset>
+    Например: /timezone 3 (для Москвы, UTC+3) или /timezone -5 (для Нью-Йорка, UTC-5)
+    """
+    user_id = message.chat.id
+    conversation = Conversation(user_id)
+    await conversation.get_from_db()
+
+    # Получаем аргументы команды
+    args = message.text.split() if message.text else []
+    
+    if len(args) < 2:
+        # Показываем текущий часовой пояс и инструкцию
+        current_offset = conversation.timezone_offset
+        if current_offset is not None:
+            offset_str = f"+{current_offset}" if current_offset >= 0 else str(current_offset)
+            response = (
+                f"🕐 Текущий часовой пояс: UTC{offset_str}\n\n"
+                f"Чтобы изменить часовой пояс, используйте:\n"
+                f"/timezone <смещение>\n\n"
+                f"Примеры:\n"
+                f"• /timezone 3 (Москва, UTC+3)\n"
+                f"• /timezone -5 (Нью-Йорк, UTC-5)\n"
+                f"• /timezone 0 (Лондон, UTC+0)\n"
+                f"• /timezone 9 (Токио, UTC+9)"
+            )
+        else:
+            from core.config import TIMEZONE_OFFSET
+            default_offset = TIMEZONE_OFFSET
+            offset_str = f"+{default_offset}" if default_offset >= 0 else str(default_offset)
+            response = (
+                f"🕐 Часовой пояс не установлен (используется значение по умолчанию: UTC{offset_str})\n\n"
+                f"Чтобы установить свой часовой пояс, используйте:\n"
+                f"/timezone <смещение>\n\n"
+                f"Примеры:\n"
+                f"• /timezone 3 (Москва, UTC+3)\n"
+                f"• /timezone -5 (Нью-Йорк, UTC-5)\n"
+                f"• /timezone 0 (Лондон, UTC+0)\n"
+                f"• /timezone 9 (Токио, UTC+9)"
+            )
+        sent_msg = await message.answer(response, reply_markup=ReplyKeyboardRemove())
+    else:
+        # Пытаемся распарсить смещение
+        try:
+            offset = int(args[1])
+            # Проверяем разумные пределы (от -12 до +14)
+            if offset < -12 or offset > 14:
+                sent_msg = await message.answer(
+                    "❌ Неверное смещение. Используйте значение от -12 до +14.\n\n"
+                    "Примеры:\n"
+                    "• /timezone 3 (Москва, UTC+3)\n"
+                    "• /timezone -5 (Нью-Йорк, UTC-5)",
+                    reply_markup=ReplyKeyboardRemove()
+                )
+            else:
+                conversation.timezone_offset = offset
+                await conversation.update_in_db()
+                offset_str = f"+{offset}" if offset >= 0 else str(offset)
+                sent_msg = await message.answer(
+                    f"✅ Часовой пояс установлен: UTC{offset_str}",
+                    reply_markup=ReplyKeyboardRemove()
+                )
+                logger.info(f"USER{user_id}: timezone_offset установлен на {offset}")
+        except ValueError:
+            sent_msg = await message.answer(
+                "❌ Неверный формат. Используйте число.\n\n"
+                "Примеры:\n"
+                "• /timezone 3 (Москва, UTC+3)\n"
+                "• /timezone -5 (Нью-Йорк, UTC-5)",
+                reply_markup=ReplyKeyboardRemove()
+            )
+
+    # Не пересылаем сообщения из админ-чата в админ-чат
+    if user_id != ADMIN_CHAT:
+        await forward_to_debug(user_id, message.message_id)
+        await forward_to_debug(user_id, sent_msg.message_id)

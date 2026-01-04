@@ -39,6 +39,7 @@ class Conversation:
         referral_code=None,
         service_account_json=None,
         user_email=None,
+        timezone_offset=None,
     ):
         self.id = id
         self.name = name
@@ -47,14 +48,15 @@ class Conversation:
         self.referral_code = referral_code
         self.service_account_json = service_account_json
         self.user_email = user_email
+        self.timezone_offset = timezone_offset
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None}, user_email={self.user_email})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None}, user_email={self.user_email}, timezone_offset={self.timezone_offset})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -65,11 +67,12 @@ class Conversation:
                 self.referral_code = row[4]
                 self.service_account_json = row[5] if len(row) > 5 else None
                 self.user_email = row[6] if len(row) > 6 else None
+                self.timezone_offset = row[7] if len(row) > 7 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -81,6 +84,7 @@ class Conversation:
                     referral_code=row[4],
                     service_account_json=row[5] if len(row) > 5 else None,
                     user_email=row[6] if len(row) > 6 else None,
+                    timezone_offset=row[7] if len(row) > 7 else None,
                 )
             return None
 
@@ -96,8 +100,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -107,6 +111,7 @@ class Conversation:
                 self.referral_code,
                 self.service_account_json,
                 self.user_email,
+                self.timezone_offset,
             )
             await cursor.execute(sql_insert, values)
             await db.commit()
@@ -198,7 +203,7 @@ class Conversation:
             cursor = await db.cursor()
             sql_query = """
                 UPDATE conversations
-                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?, user_email = ?
+                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?, user_email = ?, timezone_offset = ?
                 WHERE id = ?
             """
             values = (
@@ -208,6 +213,7 @@ class Conversation:
                 self.referral_code,
                 self.service_account_json,
                 self.user_email,
+                self.timezone_offset,
                 self.id,
             )
             await cursor.execute(sql_query, values)

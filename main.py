@@ -35,6 +35,10 @@ async def set_bot_commands():
             command="forget",
             description="🔄 Сбросить историю диалога и начать общение с чистого листа",
         ),
+        BotCommand(
+            command="timezone",
+            description="🕐 Установить часовой пояс (например, /timezone 3 для Москвы)",
+        ),
     ]
 
     await bot.set_my_commands(commands)

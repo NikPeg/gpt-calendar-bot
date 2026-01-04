@@ -3,7 +3,7 @@
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from core.config import TIMEZONE_OFFSET, logger
 from core.database import Conversation
@@ -128,23 +128,38 @@ CALENDAR_FUNCTIONS = [
 ]
 
 
-def parse_datetime(datetime_str: str | None) -> str | None:
+def parse_datetime(datetime_str: str | None, user_timezone_offset: int | None = None) -> str | None:
     """
     Парсит строку с датой/временем в ISO 8601 формат.
     Поддерживает относительные времена (например, "через 2 часа", "завтра в 15:00").
+    
+    Если datetime_str не содержит информацию о часовом поясе, предполагается,
+    что время указано в часовом поясе пользователя и конвертируется в UTC.
 
     Args:
         datetime_str: Строка с датой/временем
+        user_timezone_offset: Смещение часового пояса пользователя от UTC (опционально)
 
     Returns:
-        ISO 8601 строка или None
+        ISO 8601 строка в UTC или None
     """
     if not datetime_str:
         return None
 
-    # Если уже в формате ISO 8601, возвращаем как есть
+    # Если уже в формате ISO 8601 с timezone, возвращаем как есть
     try:
-        datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
+        # Если datetime уже имеет timezone, возвращаем как есть
+        if dt.tzinfo is not None:
+            # Конвертируем в UTC
+            dt_utc = dt.astimezone(UTC)
+            return dt_utc.isoformat().replace("+00:00", "Z")
+        # Если нет timezone, предполагаем что это время пользователя
+        if user_timezone_offset is not None:
+            user_tz = timezone(timedelta(hours=user_timezone_offset))
+            dt = dt.replace(tzinfo=user_tz)
+            dt_utc = dt.astimezone(UTC)
+            return dt_utc.isoformat().replace("+00:00", "Z")
         return datetime_str
     except (ValueError, AttributeError):
         pass
@@ -247,7 +262,9 @@ async def execute_calendar_function(
 
             # Если время не указано, используем текущее время
             if not start_datetime:
-                now = datetime.now(timezone(timedelta(hours=TIMEZONE_OFFSET)))
+                # Используем персональный часовой пояс пользователя или значение по умолчанию
+                user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+                now = datetime.now(timezone(timedelta(hours=user_timezone_offset)))
                 # Форматируем в RFC3339 для Google Calendar API
                 start_datetime = now.isoformat().replace("+00:00", "Z")
 
@@ -268,8 +285,9 @@ async def execute_calendar_function(
 
         if function_name == "list_calendar_events":
             max_results = arguments.get("max_results", 10)
-            time_min = parse_datetime(arguments.get("time_min"))
-            time_max = parse_datetime(arguments.get("time_max"))
+            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+            time_min = parse_datetime(arguments.get("time_min"), user_timezone_offset)
+            time_max = parse_datetime(arguments.get("time_max"), user_timezone_offset)
 
             events = calendar_service.list_events(
                 user_email=user_email,
@@ -324,8 +342,9 @@ async def execute_calendar_function(
 
             summary = arguments.get("summary")
             description = arguments.get("description")
-            start_datetime = parse_datetime(arguments.get("start_datetime"))
-            end_datetime = parse_datetime(arguments.get("end_datetime"))
+            user_timezone_offset = conversation.timezone_offset if conversation.timezone_offset is not None else TIMEZONE_OFFSET
+            start_datetime = parse_datetime(arguments.get("start_datetime"), user_timezone_offset)
+            end_datetime = parse_datetime(arguments.get("end_datetime"), user_timezone_offset)
             location = arguments.get("location")
 
             event = calendar_service.update_event(

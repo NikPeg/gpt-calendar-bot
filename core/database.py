@@ -37,20 +37,22 @@ class Conversation:
         active_messages_count=None,
         subscription_verified=None,
         referral_code=None,
+        service_account_json=None,
     ):
         self.id = id
         self.name = name
         self.active_messages_count = active_messages_count
         self.subscription_verified = subscription_verified
         self.referral_code = referral_code
+        self.service_account_json = service_account_json
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -59,11 +61,12 @@ class Conversation:
                 self.active_messages_count = row[2]
                 self.subscription_verified = row[3]
                 self.referral_code = row[4]
+                self.service_account_json = row[5] if len(row) > 5 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -73,6 +76,7 @@ class Conversation:
                     active_messages_count=row[2],
                     subscription_verified=row[3],
                     referral_code=row[4],
+                    service_account_json=row[5] if len(row) > 5 else None,
                 )
             return None
 
@@ -88,8 +92,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -97,6 +101,7 @@ class Conversation:
                 self.active_messages_count,
                 self.subscription_verified,
                 self.referral_code,
+                self.service_account_json,
             )
             await cursor.execute(sql_insert, values)
             await db.commit()
@@ -188,7 +193,7 @@ class Conversation:
             cursor = await db.cursor()
             sql_query = """
                 UPDATE conversations
-                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?
+                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?
                 WHERE id = ?
             """
             values = (
@@ -196,6 +201,7 @@ class Conversation:
                 self.active_messages_count,
                 self.subscription_verified,
                 self.referral_code,
+                self.service_account_json,
                 self.id,
             )
             await cursor.execute(sql_query, values)

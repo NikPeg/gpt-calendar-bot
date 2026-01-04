@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 import cv2
 import telegramify_markdown
 
+import json
+
 from core.config import (
     FULL_LEVEL,
     SYSTEM_PROMPT,
@@ -17,6 +19,10 @@ from core.config import (
     logger,
 )
 from core.database import Conversation
+from services.calendar_functions import (
+    CALENDAR_FUNCTIONS,
+    execute_calendar_function,
+)
 from services.llm_client import send_image_to_vision_model, send_request_to_openrouter
 
 
@@ -79,6 +85,20 @@ async def get_llm_response(
         system_content = system_content.replace("{USERNAME}", username_info)
     else:
         system_content = system_content.replace("{USERNAME}", "")
+    
+    # Добавляем информацию о календаре, если он настроен
+    if conversation.service_account_json:
+        calendar_info = (
+            "\n\nТы можешь управлять Google Calendar пользователя. "
+            "Доступны следующие функции:\n"
+            "- create_calendar_event: создание событий\n"
+            "- list_calendar_events: просмотр событий\n"
+            "- get_calendar_event: получение информации о событии\n"
+            "- update_calendar_event: изменение событий\n"
+            "- delete_calendar_event: удаление событий\n\n"
+            "Используй эти функции для управления календарем пользователя."
+        )
+        system_content += calendar_info
 
     # Формируем финальный промпт: системный промпт ПЕРВЫМ, затем история сообщений
     prompt_for_request = [
@@ -98,20 +118,117 @@ async def get_llm_response(
     # Логируем промпт перед отправкой
     log_prompt(chat_id, prompt_for_request, "MESSAGE")
 
+    # Проверяем, настроен ли календарь для function calling
+    conversation_for_functions = Conversation(chat_id)
+    await conversation_for_functions.get_from_db()
+    functions = None
+    if conversation_for_functions.service_account_json:
+        functions = CALENDAR_FUNCTIONS
+
     # Запрашиваем ответ от LLM
     try:
-        llm_msg = await send_request_to_openrouter(prompt_for_request)
+        response = await send_request_to_openrouter(
+            prompt_for_request, functions=functions
+        )
     except Exception as e:
         logger.error(f"LLM{chat_id} - Критическая ошибка: {e}", exc_info=True)
         return None, conversation
 
-    if llm_msg is None or llm_msg.strip() == "":
+    if response is None:
         logger.error(f"LLM{chat_id} - пустой ответ от LLM")
+        return None, conversation
+
+    # Обрабатываем ответ (может быть текст или function calling)
+    llm_msg = await _process_llm_response(response, chat_id, prompt_for_request, functions)
+
+    if llm_msg is None or llm_msg.strip() == "":
+        logger.error(f"LLM{chat_id} - пустой ответ после обработки")
         return None, conversation
 
     logger.debug(f"LLM_RAWOUTPUT{chat_id}:{llm_msg}")
 
     return llm_msg, conversation
+
+
+async def _process_llm_response(
+    response: dict, chat_id: int, prompt: list[dict], functions: list[dict] | None
+) -> str | None:
+    """
+    Обрабатывает ответ от LLM, включая function calling.
+    
+    Args:
+        response: Ответ от LLM (объект message)
+        chat_id: ID чата
+        prompt: Текущий промпт
+        functions: Список доступных функций
+        
+    Returns:
+        Текст ответа для пользователя
+    """
+    if not response:
+        return None
+    
+    # Проверяем, есть ли tool_calls (function calling)
+    tool_calls = response.get("tool_calls")
+    
+    if tool_calls and functions:
+        # Обрабатываем function calling
+        function_results = []
+        
+        for tool_call in tool_calls:
+            function_name = tool_call.get("function", {}).get("name")
+            function_args_str = tool_call.get("function", {}).get("arguments", "{}")
+            
+            try:
+                function_args = json.loads(function_args_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing function arguments: {e}")
+                function_results.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id"),
+                    "content": f"Ошибка: неверный формат аргументов функции",
+                })
+                continue
+            
+            logger.info(f"LLM{chat_id}: Calling function {function_name} with args: {function_args}")
+            
+            # Выполняем функцию
+            result = await execute_calendar_function(
+                function_name, function_args, chat_id
+            )
+            
+            function_results.append({
+                "role": "tool",
+                "tool_call_id": tool_call.get("id"),
+                "content": result,
+            })
+        
+        # Добавляем результаты функций в промпт и запрашиваем финальный ответ
+        prompt.append(response)  # Добавляем сообщение с tool_calls
+        prompt.extend(function_results)  # Добавляем результаты функций
+        
+        # Запрашиваем финальный ответ от LLM
+        try:
+            final_response = await send_request_to_openrouter(
+                prompt, functions=functions, function_call="none"  # Не вызываем функции снова
+            )
+            
+            if final_response and isinstance(final_response, dict):
+                content = final_response.get("content")
+                if content:
+                    return content
+        except Exception as e:
+            logger.error(f"Error getting final response after function call: {e}", exc_info=True)
+            # Возвращаем результаты функций напрямую
+            if function_results:
+                return "\n\n".join([r["content"] for r in function_results])
+    
+    # Обычный текстовый ответ
+    content = response.get("content")
+    if content:
+        return content
+    
+    return None
 
 
 async def save_to_context_and_format(
@@ -363,6 +480,20 @@ async def process_user_video(
             system_content = system_content.replace("{USERNAME}", username_info)
         else:
             system_content = system_content.replace("{USERNAME}", "")
+        
+        # Добавляем информацию о календаре, если он настроен
+        if conversation.service_account_json:
+            calendar_info = (
+                "\n\nТы можешь управлять Google Calendar пользователя. "
+                "Доступны следующие функции:\n"
+                "- create_calendar_event: создание событий\n"
+                "- list_calendar_events: просмотр событий\n"
+                "- get_calendar_event: получение информации о событии\n"
+                "- update_calendar_event: изменение событий\n"
+                "- delete_calendar_event: удаление событий\n\n"
+                "Используй эти функции для управления календарем пользователя."
+            )
+            system_content += calendar_info
 
         prompt_for_request = [
             {

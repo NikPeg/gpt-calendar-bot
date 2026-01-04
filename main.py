@@ -21,6 +21,7 @@ from services.subscription_service import subscription_check_loop
 from handlers import user_handlers  # noqa: F401
 from handlers import subscription_handlers  # noqa: F401
 from handlers import admin_handlers  # noqa: F401
+from handlers import setup_handlers  # noqa: F401
 from handlers import message_handlers  # noqa: F401
 # isort: on
 

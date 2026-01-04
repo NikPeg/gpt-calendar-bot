@@ -20,10 +20,29 @@ async def send_request_to_openrouter(
     api_key=LLM_TOKEN,
     retries=5,
     backoff_factor=2,
+    functions=None,
+    function_call="auto",
 ):
+    """
+    Отправляет запрос к OpenRouter API.
+    
+    Args:
+        prompt: Список сообщений для промпта
+        model: Модель для использования
+        api_key: API ключ OpenRouter
+        retries: Количество попыток при ошибках
+        backoff_factor: Множитель для задержки между попытками
+        functions: Список функций для function calling (опционально)
+        function_call: Режим вызова функций ("auto", "none", или {"name": "function_name"})
+    """
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     data = {"model": model, "messages": prompt}
+    
+    # Добавляем функции если они указаны
+    if functions:
+        data["tools"] = [{"type": "function", "function": func} for func in functions]
+        data["tool_choice"] = function_call
 
     delay = 1
     # HTTP статусы, для которых стоит делать retry (серверные ошибки и rate limit)
@@ -62,12 +81,9 @@ async def send_request_to_openrouter(
                 )
 
                 if "choices" in response_json and len(response_json["choices"]) > 0:
-                    content = response_json["choices"][0]["message"]["content"]
-                    if content is None or content.strip() == "":
-                        logger.warning(
-                            f"LLM returned empty content. Full response: {response_json}"
-                        )
-                    return content
+                    message = response_json["choices"][0]["message"]
+                    # Возвращаем полный объект сообщения для обработки function calling
+                    return message
 
                 logger.error(f"No choices in LLM response. Response: {response_json}")
                 return None

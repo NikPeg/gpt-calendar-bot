@@ -4,7 +4,7 @@
 
 from aiogram import F, types
 from aiogram.filters.command import Command
-from aiogram.types import ReplyKeyboardRemove
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 from core.bot_instance import bot, dp
@@ -105,11 +105,24 @@ async def registration(message: types.Message):
 
     conversation = Conversation(int(message.chat.id), user_name, referral_code=referral_code)
     await conversation.save_for_db()
-    builder = ReplyKeyboardBuilder()
-
-    sent_msg = await message.answer(
-        MESSAGES["msg_start"], reply_markup=builder.as_markup()
-    )
+    
+    # Проверяем, настроен ли календарь
+    if not conversation.service_account_json:
+        # Календарь не настроен - показываем инструкцию
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Настроить календарь", callback_data="setup_calendar")],
+            ]
+        )
+        sent_msg = await message.answer(
+            MESSAGES["msg_start"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+            reply_markup=keyboard,
+        )
+    else:
+        # Календарь настроен - просто приветствие
+        sent_msg = await message.answer(
+            MESSAGES["msg_start"], reply_markup=ReplyKeyboardRemove()
+        )
 
     # Если есть обязательные каналы, показываем сообщение о подписке
     if REQUIRED_CHANNELS and message.chat.id != ADMIN_CHAT:
@@ -126,24 +139,41 @@ async def registration(message: types.Message):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """Команда /start - приветствие."""
-    sent_msg = await message.answer(
-        MESSAGES["msg_start"], reply_markup=ReplyKeyboardRemove()
-    )
+    """Команда /start - приветствие и настройка календаря."""
+    user_id = message.chat.id
+    
+    # Получаем информацию о пользователе
+    conversation = Conversation(user_id)
+    await conversation.get_from_db()
+    
+    # Проверяем, настроен ли календарь
+    if not conversation.service_account_json:
+        # Календарь не настроен - показываем инструкцию
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Настроить календарь", callback_data="setup_calendar")],
+            ]
+        )
+        sent_msg = await message.answer(
+            MESSAGES["msg_start"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+            reply_markup=keyboard,
+        )
+    else:
+        # Календарь настроен - просто приветствие
+        sent_msg = await message.answer(
+            MESSAGES["msg_start"], reply_markup=ReplyKeyboardRemove()
+        )
 
     # Проверяем статус подписки, если есть обязательные каналы
-    if REQUIRED_CHANNELS and message.chat.id != ADMIN_CHAT:
-        conversation = Conversation(message.chat.id)
-        await conversation.get_from_db()
-
+    if REQUIRED_CHANNELS and user_id != ADMIN_CHAT:
         # Если пользователь не подписан (0) или подписка не проверялась (None), показываем сообщение
         if conversation.subscription_verified != 1:
-            await send_subscription_request(message.chat.id)
+            await send_subscription_request(user_id)
 
     # Не пересылаем сообщения из админ-чата в админ-чат
-    if message.chat.id != ADMIN_CHAT:
-        await forward_to_debug(message.chat.id, message.message_id)
-        await forward_to_debug(message.chat.id, sent_msg.message_id)
+    if user_id != ADMIN_CHAT:
+        await forward_to_debug(user_id, message.message_id)
+        await forward_to_debug(user_id, sent_msg.message_id)
 
 
 @dp.message(Command("help"))

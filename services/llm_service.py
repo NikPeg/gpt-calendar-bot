@@ -81,15 +81,6 @@ async def get_llm_response(
     ).strftime("%Y-%m-%d %H:%M:%S")
     system_content = SYSTEM_PROMPT.replace("{CURRENTDATE}", current_date)
 
-    # Добавляем информацию о часовом поясе пользователя
-    offset_str = (
-        f"+{user_timezone_offset}"
-        if user_timezone_offset >= 0
-        else str(user_timezone_offset)
-    )
-    timezone_info = f"\n\nВажно: Пользователь находится в часовом поясе UTC{offset_str}. Когда пользователь указывает время (например, '12:00' или 'завтра в 15:00'), интерпретируй это время в часовом поясе пользователя (UTC{offset_str}), а затем конвертируй в UTC для создания события в календаре."
-    system_content += timezone_info
-
     # Добавляем имя пользователя/чата если оно известно
     if conversation.name:
         # Для чатов (id < 0) указываем "Название чата", для личных - "Имя собеседника"
@@ -547,15 +538,6 @@ async def process_user_video(
             timezone(timedelta(hours=user_timezone_offset))
         ).strftime("%Y-%m-%d %H:%M:%S")
         system_content = SYSTEM_PROMPT.replace("{CURRENTDATE}", current_date)
-
-        # Добавляем информацию о часовом поясе пользователя
-        offset_str = (
-            f"+{user_timezone_offset}"
-            if user_timezone_offset >= 0
-            else str(user_timezone_offset)
-        )
-        timezone_info = f"\n\nВажно: Пользователь находится в часовом поясе UTC{offset_str}. Когда пользователь указывает время (например, '12:00' или 'завтра в 15:00'), интерпретируй это время в часовом поясе пользователя (UTC{offset_str}), а затем конвертируй в UTC для создания события в календаре."
-        system_content += timezone_info
 
         # Добавляем имя пользователя/чата если оно известно
         if conversation.name:

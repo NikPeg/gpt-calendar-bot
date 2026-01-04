@@ -1,30 +1,26 @@
+# Используем образ с предустановленными научными библиотеками
 FROM python:3.13-slim
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем системные зависимости для сборки пакетов, matplotlib и opencv
+# Устанавливаем только runtime библиотеки (минимальный набор для opencv-headless)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    libfreetype6-dev \
-    libpng-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
-    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файл зависимостей
 COPY requirements/requirements.txt .
 
-# Устанавливаем зависимости
+# Устанавливаем зависимости с использованием wheels (без компиляции)
+# Используем --only-binary для всех пакетов, чтобы избежать компиляции
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --only-binary :all: -r requirements.txt
 
-# Копируем весь код приложения (кроме файлов из .dockerignore)
+# Копируем весь код приложения
 COPY . .
 
 # Создаем директорию для базы данных и логов

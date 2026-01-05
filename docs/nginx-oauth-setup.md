@@ -4,9 +4,9 @@
 
 Эта инструкция поможет вам настроить nginx как reverse proxy для OAuth callback с использованием sslip.io и Let's Encrypt SSL сертификатов.
 
-**Ваш IP:** 123.45.67.89  
-**Домен:** 123-45-67-89.sslip.io  
-**Redirect URI:** https://123-45-67-89.sslip.io/oauth/callback
+**Ваш IP:** 89.169.165.5  
+**Домен:** 89-169-165-5.sslip.io  
+**Redirect URI:** https://89-169-165-5.sslip.io/oauth/callback
 
 > **Примечание:** Конфигурация Docker использует bridge network с пробросом портов (`ports: 8080:8080`). OAuth сервер доступен на хосте по адресу `127.0.0.1:8080`, что позволяет nginx проксировать запросы к контейнеру.
 
@@ -43,7 +43,7 @@ sudo systemctl enable nginx
 
 ### Проверка:
 
-Откройте в браузере: http://123.45.67.89  
+Откройте в браузере: http://89.169.165.5  
 Должна появиться страница "Welcome to nginx!"
 
 ---
@@ -72,7 +72,7 @@ sudo systemctl stop nginx
 
 ```bash
 sudo certbot certonly --standalone \
-  -d 123-45-67-89.sslip.io \
+  -d 89-169-165-5.sslip.io \
   --non-interactive \
   --agree-tos \
   --email your-email@example.com
@@ -84,8 +84,8 @@ sudo certbot certonly --standalone \
 
 ```
 Successfully received certificate.
-Certificate is saved at: /etc/letsencrypt/live/123-45-67-89.sslip.io/fullchain.pem
-Key is saved at:         /etc/letsencrypt/live/123-45-67-89.sslip.io/privkey.pem
+Certificate is saved at: /etc/letsencrypt/live/89-169-165-5.sslip.io/fullchain.pem
+Key is saved at:         /etc/letsencrypt/live/89-169-165-5.sslip.io/privkey.pem
 ```
 
 ---
@@ -104,7 +104,7 @@ sudo nano /etc/nginx/sites-available/oauth-bot
 # Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name 123-45-67-89.sslip.io;
+    server_name 89-169-165-5.sslip.io;
     
     # Для Let's Encrypt обновлений
     location /.well-known/acme-challenge/ {
@@ -120,11 +120,11 @@ server {
 # HTTPS сервер
 server {
     listen 443 ssl http2;
-    server_name 123-45-67-89.sslip.io;
+    server_name 89-169-165-5.sslip.io;
     
     # SSL сертификаты
-    ssl_certificate /etc/letsencrypt/live/123-45-67-89.sslip.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/123-45-67-89.sslip.io/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/89-169-165-5.sslip.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/89-169-165-5.sslip.io/privkey.pem;
     
     # SSL настройки (современные, безопасные)
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -198,17 +198,82 @@ sudo systemctl status nginx
 
 ## Шаг 5: Настройка Firewall
 
+### ⚠️ ВАЖНО: Сначала проверьте статус ufw
+
 ```bash
+sudo ufw status
+```
+
+Возможные варианты:
+
+**Вариант 1: Status: inactive**
+```
+Status: inactive
+```
+Это означает, что ufw установлен, но **выключен**. Правила можно добавлять, но они не работают!
+
+**Вариант 2: Status: active**
+```
+Status: active
+```
+Firewall уже включен и правила работают.
+
+### Добавьте правила для HTTP и HTTPS:
+
+```bash
+# ⚠️ КРИТИЧЕСКИ ВАЖНО: Сначала разрешите SSH, иначе потеряете доступ!
+sudo ufw allow ssh
+# или
+sudo ufw allow 22/tcp
+
 # Разрешите HTTP и HTTPS
 sudo ufw allow 'Nginx Full'
 
 # Или вручную:
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-
-# Проверьте статус
-sudo ufw status
 ```
+
+### Если ufw был неактивен - включите его:
+
+```bash
+# Проверьте, какие правила будут применены
+sudo ufw show added
+
+# Включите ufw
+sudo ufw enable
+```
+
+При включении будет предупреждение:
+```
+Command may disrupt existing ssh connections. Proceed with operation (y|n)?
+```
+Нажмите `y` (мы уже разрешили SSH выше).
+
+### ✅ Проверьте, что все работает:
+
+```bash
+sudo ufw status verbose
+```
+
+**Ожидаемый результат:**
+```
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    Anywhere
+80/tcp                     ALLOW IN    Anywhere
+443/tcp                    ALLOW IN    Anywhere
+22/tcp (v6)                ALLOW IN    Anywhere (v6)
+80/tcp (v6)                ALLOW IN    Anywhere (v6)
+443/tcp (v6)              ALLOW IN    Anywhere (v6)
+```
+
+**Если видите `Status: inactive`** - значит ufw все еще выключен, вернитесь к команде `sudo ufw enable`!
 
 ---
 
@@ -239,7 +304,7 @@ tcp   0   0 0.0.0.0:8080   0.0.0.0:*   LISTEN   12345/docker-proxy
 
 ### 2. Проверьте HTTPS:
 
-Откройте в браузере: https://123-45-67-89.sslip.io
+Откройте в браузере: https://89-169-165-5.sslip.io
 
 Должно быть:
 - ✅ Зеленый замок (валидный SSL)
@@ -248,7 +313,7 @@ tcp   0   0 0.0.0.0:8080   0.0.0.0:*   LISTEN   12345/docker-proxy
 ### 3. Проверьте OAuth callback:
 
 ```bash
-curl -I https://123-45-67-89.sslip.io/oauth/callback
+curl -I https://89-169-165-5.sslip.io/oauth/callback
 ```
 
 Должен быть ответ от вашего OAuth сервера.
@@ -307,7 +372,7 @@ docker port gpt-calendar-bot
 
 ```bash
 # Проверьте сертификаты
-sudo ls -la /etc/letsencrypt/live/123-45-67-89.sslip.io/
+sudo ls -la /etc/letsencrypt/live/89-169-165-5.sslip.io/
 
 # Должны быть файлы:
 # - fullchain.pem
@@ -332,6 +397,30 @@ sudo ufw status
 
 # Откройте порт если закрыт
 sudo ufw allow 443/tcp
+```
+
+### Проблема: `sudo ufw status` показывает `Status: inactive`
+
+**Причина:** Firewall выключен, правила добавлены но не применяются.
+
+**Решение:**
+```bash
+# ⚠️ ВАЖНО: Сначала разрешите SSH!
+sudo ufw allow 22/tcp
+
+# Разрешите нужные порты
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Проверьте, что правила добавлены
+sudo ufw show added
+
+# Включите firewall
+sudo ufw enable
+
+# Проверьте что теперь активен
+sudo ufw status verbose
+# Должно показать: Status: active
 ```
 
 ---
@@ -399,14 +488,16 @@ location /oauth/callback {
 
 - [ ] Nginx установлен и запущен
 - [ ] Certbot установлен
-- [ ] SSL сертификат получен для 123-45-67-89.sslip.io
+- [ ] SSL сертификат получен для 89-169-165-5.sslip.io
 - [ ] Конфигурация nginx создана и активирована
 - [ ] `nginx -t` проходит успешно
+- [ ] Firewall (ufw) **включен** (`sudo ufw status` показывает `Status: active`)
+- [ ] SSH разрешен в firewall (порт 22)
 - [ ] Firewall разрешает порты 80 и 443
 - [ ] Docker контейнер `gpt-calendar-bot` запущен (`docker ps | grep gpt-calendar-bot`)
 - [ ] Порт 8080 проброшен из контейнера на хост (`docker port gpt-calendar-bot`)
 - [ ] OAuth сервер доступен на хосте по адресу `127.0.0.1:8080`
-- [ ] https://123-45-67-89.sslip.io открывается с валидным SSL
+- [ ] https://89-169-165-5.sslip.io открывается с валидным SSL
 - [ ] OAuth callback работает
 - [ ] В Google Cloud Console обновлен Redirect URI
 - [ ] В .env файле обновлен GOOGLE_OAUTH_REDIRECT_URI

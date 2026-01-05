@@ -21,6 +21,20 @@
 
 ---
 
+## 🔒 Важное предупреждение о безопасности
+
+**ПЕРЕД НАЧАЛОМ:** В Шаге 5 (Настройка Firewall) вы **ОБЯЗАТЕЛЬНО ДОЛЖНЫ**:
+
+1. ✅ Проверить существующие правила firewall
+2. ✅ Удалить опасные правила (FTP, большие диапазоны портов)
+3. ✅ Оставить открытыми ТОЛЬКО порты 22 (SSH), 80 и 443 (HTTP/HTTPS)
+
+**⚠️ Пропуск этого шага может сделать ваш сервер уязвимым для атак!**
+
+Подробнее в разделе **"Шаг 5: Настройка Firewall"**.
+
+---
+
 ## Шаг 1: Установка Nginx
 
 ### На Ubuntu/Debian:
@@ -75,7 +89,7 @@ sudo certbot certonly --standalone \
   -d 89-169-165-5.sslip.io \
   --non-interactive \
   --agree-tos \
-  --email your-email@example.com
+  --email peganov.nik@gmail.com your-email@example.com
 ```
 
 **Замените `your-email@example.com`** на ваш реальный email!
@@ -198,7 +212,28 @@ sudo systemctl status nginx
 
 ## Шаг 5: Настройка Firewall
 
-### ⚠️ ВАЖНО: Сначала проверьте статус ufw
+### ⚠️ ШАГ 1: Проверьте существующие правила
+
+**КРИТИЧЕСКИ ВАЖНО:** Перед добавлением новых правил проверьте, что уже открыто!
+
+```bash
+sudo ufw status verbose
+```
+
+### 🚨 Проверьте наличие опасных правил:
+
+Если видите **любое из этого** - это серьезная угроза безопасности:
+
+```
+❌ 20/tcp (FTP)
+❌ 21/tcp (FTP) 
+❌ 49152:65535/tcp (пассивные FTP порты - это 16,384 открытых порта!)
+❌ Дублирующиеся правила для 80/tcp или 443/tcp
+```
+
+**Если видите FTP или большой диапазон портов - переходите к разделу "🔒 Очистка опасных правил" ниже!**
+
+### ⚠️ ШАГ 2: Проверьте статус ufw
 
 ```bash
 sudo ufw status
@@ -218,7 +253,47 @@ Status: active
 ```
 Firewall уже включен и правила работают.
 
-### Добавьте правила для HTTP и HTTPS:
+---
+
+### 🔒 Очистка опасных правил (если обнаружены)
+
+**Если `sudo ufw status verbose` показал FTP или диапазон 49152:65535, выполните:**
+
+```bash
+# Получите номера правил
+sudo ufw status numbered
+
+# Удалите FTP правила (если они есть и не используются)
+# ВНИМАНИЕ: Если вам действительно нужен FTP, используйте SFTP вместо FTP
+sudo ufw delete allow 20/tcp
+sudo ufw delete allow 21/tcp
+sudo ufw delete allow from any to any port 21
+sudo ufw delete allow 49152:65535/tcp
+
+# Если правила были для IPv6, удалите и их:
+sudo ufw status numbered  # проверьте снова
+# sudo ufw delete [номер правила]  # удалите по номерам если нужно
+
+# Удалите дублирующиеся правила (оставьте только 'Nginx Full')
+# Сначала проверьте, есть ли дубликаты:
+sudo ufw status | grep -E "80/tcp|443/tcp"
+
+# Если видите и "Nginx Full" и отдельные "80/tcp", "443/tcp":
+sudo ufw delete allow 80/tcp
+sudo ufw delete allow 443/tcp
+# 'Nginx Full' покрывает оба порта, дубликаты не нужны
+```
+
+**После очистки проверьте результат:**
+```bash
+sudo ufw status verbose
+```
+
+Должны остаться **только** необходимые правила (см. пример в конце раздела).
+
+---
+
+### ⚠️ ШАГ 3: Добавьте правила для HTTP и HTTPS
 
 ```bash
 # ⚠️ КРИТИЧЕСКИ ВАЖНО: Сначала разрешите SSH, иначе потеряете доступ!
@@ -256,24 +331,39 @@ Command may disrupt existing ssh connections. Proceed with operation (y|n)?
 sudo ufw status verbose
 ```
 
-**Ожидаемый результат:**
+**✅ Правильная конфигурация (только необходимые порты для бота):**
 ```
 Status: active
 Logging: on (low)
-Default: deny (incoming), allow (outgoing), disabled (routed)
+Default: deny (incoming), allow (outgoing), deny (routed)
 New profiles: skip
 
 To                         Action      From
 --                         ------      ----
 22/tcp                     ALLOW IN    Anywhere
+80,443/tcp (Nginx Full)    ALLOW IN    Anywhere
+22/tcp (v6)                ALLOW IN    Anywhere (v6)
+80,443/tcp (Nginx Full (v6)) ALLOW IN  Anywhere (v6)
+```
+
+**Или если добавляли порты вручную:**
+```
+22/tcp                     ALLOW IN    Anywhere
 80/tcp                     ALLOW IN    Anywhere
 443/tcp                    ALLOW IN    Anywhere
 22/tcp (v6)                ALLOW IN    Anywhere (v6)
 80/tcp (v6)                ALLOW IN    Anywhere (v6)
-443/tcp (v6)              ALLOW IN    Anywhere (v6)
+443/tcp (v6)               ALLOW IN    Anywhere (v6)
 ```
 
+**🚨 НЕ ДОЛЖНО БЫТЬ:**
+- ❌ FTP портов (20, 21)
+- ❌ Диапазонов типа 49152:65535
+- ❌ Дублирующихся правил для одного порта
+
 **Если видите `Status: inactive`** - значит ufw все еще выключен, вернитесь к команде `sudo ufw enable`!
+
+**Если видите лишние/опасные правила** - вернитесь к разделу "🔒 Очистка опасных правил"!
 
 ---
 
@@ -423,6 +513,52 @@ sudo ufw status verbose
 # Должно показать: Status: active
 ```
 
+### Проблема: Открыты лишние порты (FTP, большие диапазоны)
+
+**Симптомы:**
+```
+20/tcp, 21/tcp             ALLOW IN    Anywhere
+49152:65535/tcp            ALLOW IN    Anywhere  # 16,000+ открытых портов!
+```
+
+**Причина:** Ранее был установлен FTP сервер или неправильно настроен firewall.
+
+**Решение - полная очистка и переустановка правил:**
+
+```bash
+# 1. Посмотрите все правила с номерами
+sudo ufw status numbered
+
+# 2. Удалите опасные правила по номерам (начиная с наибольшего!)
+# Например, если FTP правило номер 5:
+sudo ufw delete 5
+
+# Или удалите по описанию:
+sudo ufw delete allow 20/tcp
+sudo ufw delete allow 21/tcp
+sudo ufw delete allow 49152:65535/tcp
+
+# 3. Проверьте результат
+sudo ufw status verbose
+
+# 4. Если нужно сбросить все правила и начать заново:
+# ⚠️ ВНИМАНИЕ: Это удалит ВСЕ правила!
+sudo ufw --force reset
+
+# Затем заново настройте (ОБЯЗАТЕЛЬНО сначала SSH!):
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 'Nginx Full'  # или: sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+**Финальная проверка - должно быть ТОЛЬКО:**
+- ✅ 22/tcp (SSH)
+- ✅ 80/tcp и 443/tcp (HTTP/HTTPS)
+- ❌ Ничего больше!
+
 ---
 
 ## 📊 Полезные команды
@@ -491,9 +627,12 @@ location /oauth/callback {
 - [ ] SSL сертификат получен для 89-169-165-5.sslip.io
 - [ ] Конфигурация nginx создана и активирована
 - [ ] `nginx -t` проходит успешно
+- [ ] **🔒 БЕЗОПАСНОСТЬ:** Проверены существующие правила firewall (`sudo ufw status verbose`)
+- [ ] **🔒 БЕЗОПАСНОСТЬ:** Удалены опасные правила (FTP, большие диапазоны портов)
+- [ ] **🔒 БЕЗОПАСНОСТЬ:** Нет дублирующихся правил
 - [ ] Firewall (ufw) **включен** (`sudo ufw status` показывает `Status: active`)
 - [ ] SSH разрешен в firewall (порт 22)
-- [ ] Firewall разрешает порты 80 и 443
+- [ ] Firewall разрешает ТОЛЬКО порты 22, 80, 443 (и ничего больше!)
 - [ ] Docker контейнер `gpt-calendar-bot` запущен (`docker ps | grep gpt-calendar-bot`)
 - [ ] Порт 8080 проброшен из контейнера на хост (`docker port gpt-calendar-bot`)
 - [ ] OAuth сервер доступен на хосте по адресу `127.0.0.1:8080`

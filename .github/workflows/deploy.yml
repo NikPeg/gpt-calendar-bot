@@ -232,6 +232,37 @@ jobs:
                 echo "✅ Порт 8080 свободен"
               fi
               
+              # Очищаем Docker сети и перезапускаем Docker для исправления iptables
+              echo "🧹 Очищаем Docker сети и правила iptables..."
+              
+              # Удаляем старую сеть проекта если она существует
+              EXISTING_NETWORK=$(docker network ls --filter name=gpt-calendar-bot --format "{{.Name}}" || true)
+              if [ -n "$EXISTING_NETWORK" ]; then
+                echo "  Удаляем существующую сеть: $EXISTING_NETWORK"
+                docker network rm "$EXISTING_NETWORK" 2>/dev/null || true
+              fi
+              
+              # Очищаем неиспользуемые сети
+              echo "  Удаляем неиспользуемые Docker сети..."
+              docker network prune -f 2>/dev/null || true
+              
+              # Перезапускаем Docker демон для пересоздания правил iptables
+              echo "  Перезапускаем Docker демон..."
+              sudo systemctl restart docker
+              
+              # Ждем пока Docker полностью запустится
+              echo "  Ожидаем запуска Docker..."
+              sleep 5
+              
+              # Проверяем что Docker запустился
+              if ! docker info >/dev/null 2>&1; then
+                echo "❌ Docker не запустился после перезапуска!"
+                sudo systemctl status docker
+                return 1
+              fi
+              
+              echo "✅ Docker успешно перезапущен"
+              
               # Создаем .env файл со всеми переменными окружения
               echo "📝 Создаем .env файл..."
               {

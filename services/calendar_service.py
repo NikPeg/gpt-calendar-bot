@@ -172,6 +172,7 @@ class CalendarService(GoogleServiceBase):
         start_datetime: str | None = None,
         end_datetime: str | None = None,
         location: str | None = None,
+        recurrence: list[str] | None = None,
     ) -> dict[str, Any] | None:
         """
         Создает событие в календаре.
@@ -183,6 +184,7 @@ class CalendarService(GoogleServiceBase):
             start_datetime: Дата и время начала в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS)
             end_datetime: Дата и время окончания в формате ISO 8601
             location: Место проведения
+            recurrence: Список правил повторения в формате RRULE (опционально)
 
         Returns:
             Созданное событие или None при ошибке
@@ -205,6 +207,9 @@ class CalendarService(GoogleServiceBase):
 
             if location:
                 event["location"] = location
+
+            if recurrence:
+                event["recurrence"] = recurrence
 
             # Обрабатываем даты
             if start_datetime and end_datetime:

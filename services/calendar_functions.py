@@ -15,7 +15,7 @@ from services.calendar_service import CalendarService
 CALENDAR_FUNCTIONS = [
     {
         "name": "create_calendar_event",
-        "description": "Создает новое событие в календаре пользователя",
+        "description": "Создает новое событие в календаре пользователя. Поддерживает создание повторяющихся событий (еженедельных, ежемесячных)",
         "parameters": {
             "type": "object",
             "properties": {
@@ -38,6 +38,10 @@ CALENDAR_FUNCTIONS = [
                 "location": {
                     "type": "string",
                     "description": "Место проведения события (опционально)",
+                },
+                "recurrence_rule": {
+                    "type": "string",
+                    "description": "Правило повторения события (опционально). Используй значения: 'weekly' для еженедельных событий или 'monthly' для ежемесячных событий. Если параметр не указан, событие будет одноразовым",
                 },
             },
             "required": ["summary"],
@@ -401,10 +405,16 @@ class CreateEventCommand(CalendarCommand):
         start_datetime = self._parse_datetime(self.arguments.get("start_datetime"))
         end_datetime = self._parse_datetime(self.arguments.get("end_datetime"))
         location = self.arguments.get("location")
+        recurrence_rule = self.arguments.get("recurrence_rule")
 
         # Если время не указано, используем текущее время
         if not start_datetime:
             start_datetime = self._get_current_datetime()
+
+        # Обрабатываем правило повторения
+        recurrence = None
+        if recurrence_rule:
+            recurrence = self._parse_recurrence_rule(recurrence_rule)
 
         # Создаем событие в основном календаре
         event = self.context.calendar_service.create_event(
@@ -414,13 +424,39 @@ class CreateEventCommand(CalendarCommand):
             start_datetime=start_datetime,
             end_datetime=end_datetime,
             location=location,
+            recurrence=recurrence,
         )
 
         if event:
             event_id = event.get("id", "")
             start = event.get("start", {}).get("dateTime", "")
-            return f"✅ Событие создано успешно!\n\nID: {event_id}\nВремя: {start}"
+            recurrence_info = " (повторяющееся)" if recurrence else ""
+            return f"✅ Событие создано успешно{recurrence_info}!\n\nID: {event_id}\nВремя: {start}"
         return "❌ Не удалось создать событие"
+
+    @staticmethod
+    def _parse_recurrence_rule(recurrence_rule: str) -> list[str] | None:
+        """
+        Преобразует строковое правило повторения в формат RRULE для Google Calendar API.
+
+        Args:
+            recurrence_rule: Строковое правило ('weekly', 'monthly')
+
+        Returns:
+            Список строк RRULE или None
+        """
+        rule_lower = recurrence_rule.lower().strip()
+
+        if rule_lower == "weekly":
+            # Еженедельное повторение без даты окончания
+            return ["RRULE:FREQ=WEEKLY;INTERVAL=1"]
+        if rule_lower == "monthly":
+            # Ежемесячное повторение без даты окончания
+            return ["RRULE:FREQ=MONTHLY;INTERVAL=1"]
+        logger.warning(
+            f"Unknown recurrence rule: {recurrence_rule}. Supported: 'weekly', 'monthly'"
+        )
+        return None
 
 
 class ListEventsCommand(CalendarCommand):

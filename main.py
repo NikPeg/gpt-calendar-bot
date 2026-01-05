@@ -85,33 +85,42 @@ async def main():
         print("\n🛑 Получен сигнал остановки")
     except Exception as e:
         logger.critical(f"CRITICAL_ERROR: {e}", exc_info=True)
+        raise  # Пробрасываем ошибку дальше для перезапуска Docker'ом
     finally:
         print("Останавливаем бота...")
+        
+        # Отменяем фоновые задачи
         subscription_task.cancel()
         oauth_task.cancel()
+        
+        # Дожидаемся их завершения
         with contextlib.suppress(asyncio.CancelledError):
             await subscription_task
             await oauth_task
+        
+        # Закрываем сессию бота
         await bot.session.close()
+        
+        # Принудительно завершаем все оставшиеся asyncio задачи
+        pending = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+        if pending:
+            print(f"Отменяем {len(pending)} оставшихся задач...")
+            for task in pending:
+                task.cancel()
+            # Ждем завершения с подавлением ошибок отмены
+            await asyncio.gather(*pending, return_exceptions=True)
+        
         print("✅ Бот остановлен")
-
-
-async def run_with_restart():
-    """Запуск с автоматическим перезапуском при ошибках."""
-    while True:
-        try:
-            await main()
-            break  # Нормальное завершение - выходим из цикла
-        except (KeyboardInterrupt, SystemExit):
-            print("👋 Завершение работы")
-            break
-        except Exception as e:
-            print(f"main() завершился с ошибкой: {e}. Перезапуск через 5 секунд...")
-            await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_with_restart())
+        # Убрали run_with_restart() - перезапуск теперь на уровне Docker
+        asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         print("👋 Программа завершена")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+        # При любой ошибке контейнер завершается с кодом 1,
+        # и Docker перезапустит его благодаря restart: unless-stopped
+        exit(1)

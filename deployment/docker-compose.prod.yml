@@ -2,6 +2,8 @@ services:
   gpt-calendar-bot:
     image: cr.yandex/${YC_REGISTRY_ID}/gpt-calendar-bot:latest
     container_name: gpt-calendar-bot
+    # restart: unless-stopped - перезапуск при ошибках (единственный механизм)
+    # Внутри контейнера НЕТ автоматического перезапуска!
     restart: unless-stopped
     network_mode: host
     env_file:

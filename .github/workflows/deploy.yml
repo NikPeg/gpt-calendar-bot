@@ -232,36 +232,43 @@ jobs:
                 echo "✅ Порт 8080 свободен"
               fi
               
-              # Очищаем Docker сети и перезапускаем Docker для исправления iptables
-              echo "🧹 Очищаем Docker сети и правила iptables..."
+              # Очищаем Docker сети и контейнеры через docker-compose
+              echo "🧹 Очищаем Docker сети и контейнеры..."
+              cd "$DEPLOY_DIR"
               
-              # Удаляем старую сеть проекта если она существует
+              # Используем docker-compose down для правильной очистки сетей
+              if [ -f docker-compose.prod.yml ]; then
+                echo "  Выполняем docker-compose down для очистки..."
+                sudo docker-compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+                sleep 2
+              fi
+              
+              # Удаляем старую сеть проекта если она все еще существует
               EXISTING_NETWORK=$(docker network ls --filter name=gpt-calendar-bot --format "{{.Name}}" || true)
               if [ -n "$EXISTING_NETWORK" ]; then
                 echo "  Удаляем существующую сеть: $EXISTING_NETWORK"
                 docker network rm "$EXISTING_NETWORK" 2>/dev/null || true
+                sleep 1
               fi
               
               # Очищаем неиспользуемые сети
               echo "  Удаляем неиспользуемые Docker сети..."
               docker network prune -f 2>/dev/null || true
               
-              # Перезапускаем Docker демон для пересоздания правил iptables
-              echo "  Перезапускаем Docker демон..."
-              sudo systemctl restart docker
+              # Исправляем iptables правила для Docker
+              echo "  Исправляем правила iptables для Docker..."
               
-              # Ждем пока Docker полностью запустится
-              echo "  Ожидаем запуска Docker..."
-              sleep 5
-              
-              # Проверяем что Docker запустился
-              if ! docker info >/dev/null 2>&1; then
-                echo "❌ Docker не запустился после перезапуска!"
-                sudo systemctl status docker
-                return 1
+              # Проверяем и создаем необходимые цепочки iptables для Docker
+              if ! sudo iptables -t filter -L DOCKER-ISOLATION-STAGE-2 >/dev/null 2>&1; then
+                echo "  Создаем цепочку DOCKER-ISOLATION-STAGE-2..."
+                sudo iptables -t filter -N DOCKER-ISOLATION-STAGE-2 2>/dev/null || true
+                sudo iptables -t filter -A DOCKER-ISOLATION-STAGE-2 -j RETURN 2>/dev/null || true
               fi
               
-              echo "✅ Docker успешно перезапущен"
+              if ! sudo iptables -t filter -L DOCKER-ISOLATION-STAGE-1 >/dev/null 2>&1; then
+                echo "  Создаем цепочку DOCKER-ISOLATION-STAGE-1..."
+                sudo iptables -t filter -N DOCKER-ISOLATION-STAGE-1 2>/dev/null || true
+              fi
               
               # Создаем .env файл со всеми переменными окружения
               echo "📝 Создаем .env файл..."
@@ -283,7 +290,7 @@ jobs:
               } > "$DEPLOY_DIR/.env"
               
               # Запускаем через docker-compose
-              cd "$DEPLOY_DIR"
+              echo "🚀 Запускаем docker-compose up..."
               sudo docker-compose -f docker-compose.prod.yml up -d
             }
 

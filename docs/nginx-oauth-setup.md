@@ -8,6 +8,8 @@
 **Домен:** 123-45-67-89.sslip.io  
 **Redirect URI:** https://123-45-67-89.sslip.io/oauth/callback
 
+> **Примечание:** Конфигурация Docker использует bridge network с пробросом портов (`ports: 8080:8080`). OAuth сервер доступен на хосте по адресу `127.0.0.1:8080`, что позволяет nginx проксировать запросы к контейнеру.
+
 ---
 
 ## 📋 Требования
@@ -132,6 +134,8 @@ server {
     ssl_session_timeout 10m;
     
     # OAuth callback endpoint
+    # Примечание: 127.0.0.1:8080 работает, так как Docker пробрасывает порт 8080
+    # из контейнера на хост через bridge network (ports: 8080:8080)
     location /oauth/callback {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
@@ -213,7 +217,10 @@ sudo ufw status
 ### 1. Проверьте, что OAuth сервер запущен:
 
 ```bash
-# Проверьте, что порт 8080 слушается
+# Проверьте, что Docker контейнер запущен
+docker ps | grep gpt-calendar-bot
+
+# Проверьте, что порт 8080 слушается (Docker пробрасывает порт из контейнера на хост)
 sudo netstat -tulpn | grep 8080
 
 # Или
@@ -222,7 +229,12 @@ sudo ss -tulpn | grep 8080
 
 Должно быть что-то вроде:
 ```
-tcp   0   0 0.0.0.0:8080   0.0.0.0:*   LISTEN   12345/python
+# Docker контейнер
+CONTAINER ID   IMAGE                    STATUS         PORTS                    NAMES
+abc123def456   cr.yandex/.../bot:latest   Up 2 minutes   0.0.0.0:8080->8080/tcp   gpt-calendar-bot
+
+# Порт на хосте (проброшен Docker'ом)
+tcp   0   0 0.0.0.0:8080   0.0.0.0:*   LISTEN   12345/docker-proxy
 ```
 
 ### 2. Проверьте HTTPS:
@@ -273,15 +285,22 @@ sudo nginx -t
 
 ### Проблема: 502 Bad Gateway
 
-**Причина:** OAuth сервер не запущен на порту 8080
+**Причина:** OAuth сервер не запущен на порту 8080 или контейнер не работает
 
 **Решение:**
 ```bash
 # Проверьте Docker контейнеры
-docker ps
+docker ps | grep gpt-calendar-bot
+
+# Если контейнер не запущен, запустите его
+cd ~/gpt-calendar-bot
+docker-compose -f docker-compose.prod.yml up -d
 
 # Проверьте логи OAuth сервера
-docker logs oauth-bot-container-name
+docker logs gpt-calendar-bot
+
+# Проверьте, что порт проброшен
+docker port gpt-calendar-bot
 ```
 
 ### Проблема: SSL не работает
@@ -298,9 +317,11 @@ sudo ls -la /etc/letsencrypt/live/123-45-67-89.sslip.io/
 ### Проблема: OAuth callback не работает
 
 **Проверьте:**
-1. Порт 8080 слушается: `sudo netstat -tulpn | grep 8080`
-2. Nginx проксирует запросы: `sudo tail -f /var/log/nginx/access.log`
-3. OAuth сервер получает запросы: проверьте логи бота
+1. Docker контейнер запущен: `docker ps | grep gpt-calendar-bot`
+2. Порт 8080 проброшен на хост: `docker port gpt-calendar-bot` (должно показать `8080/tcp -> 0.0.0.0:8080`)
+3. Порт 8080 слушается на хосте: `sudo netstat -tulpn | grep 8080`
+4. Nginx проксирует запросы: `sudo tail -f /var/log/nginx/access.log`
+5. OAuth сервер получает запросы: `docker logs gpt-calendar-bot --tail=50`
 
 ### Проблема: Can't connect to port 443
 
@@ -382,7 +403,9 @@ location /oauth/callback {
 - [ ] Конфигурация nginx создана и активирована
 - [ ] `nginx -t` проходит успешно
 - [ ] Firewall разрешает порты 80 и 443
-- [ ] OAuth сервер запущен на порту 8080
+- [ ] Docker контейнер `gpt-calendar-bot` запущен (`docker ps | grep gpt-calendar-bot`)
+- [ ] Порт 8080 проброшен из контейнера на хост (`docker port gpt-calendar-bot`)
+- [ ] OAuth сервер доступен на хосте по адресу `127.0.0.1:8080`
 - [ ] https://123-45-67-89.sslip.io открывается с валидным SSL
 - [ ] OAuth callback работает
 - [ ] В Google Cloud Console обновлен Redirect URI

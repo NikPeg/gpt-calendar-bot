@@ -142,20 +142,20 @@ jobs:
             # Останавливаем и удаляем текущий контейнер
             echo "⏸️  Останавливаем текущий контейнер..."
             
-            # КРИТИЧНО: При network_mode: host процессы "убегают" из контейнера
-            # Убиваем все процессы python -u main.py на хосте
-            echo "🔍 Ищем процессы python -u main.py на хосте..."
+            # ПРИМЕЧАНИЕ: С bridge network процессы изолированы в контейнере и автоматически завершаются
+            # Но оставляем проверку на случай, если остались процессы от старой конфигурации (network_mode: host)
+            echo "🔍 Проверяем наличие процессов python -u main.py на хосте (на случай старой конфигурации)..."
             ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
             if [ -n "$ZOMBIE_PIDS" ]; then
-              echo "⚠️  Найдены процессы-зомби на хосте: $ZOMBIE_PIDS"
+              echo "⚠️  Найдены процессы на хосте (возможно, от старой конфигурации): $ZOMBIE_PIDS"
               for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                echo "  Убиваем процесс-зомби PID: $ZOMBIE_PID..."
+                echo "  Убиваем процесс PID: $ZOMBIE_PID..."
                 sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
               done
               sleep 2
-              echo "✅ Процессы-зомби уничтожены"
+              echo "✅ Процессы очищены"
             else
-              echo "✅ Процессы-зомби не найдены"
+              echo "✅ Процессы на хосте не найдены (ожидаемо для bridge network)"
             fi
             
             # Получаем ID всех контейнеров с именем gpt-calendar-bot (включая остановленные)
@@ -215,14 +215,14 @@ jobs:
             start_container() {
               echo "🚀 Запускаем контейнер через docker-compose..."
               
-              # КРИТИЧНО: Убиваем все процессы python -u main.py перед запуском
-              # Это необходимо из-за network_mode: host
-              echo "🔍 Финальная проверка процессов-зомби..."
+              # ПРИМЕЧАНИЕ: С bridge network процессы изолированы, но оставляем проверку
+              # на случай остатков от старой конфигурации
+              echo "🔍 Финальная проверка процессов на хосте..."
               ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
               if [ -n "$ZOMBIE_PIDS" ]; then
-                echo "⚠️  Найдены процессы-зомби перед запуском: $ZOMBIE_PIDS"
+                echo "⚠️  Найдены процессы на хосте перед запуском: $ZOMBIE_PIDS"
                 for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                  echo "  Убиваем процесс-зомби PID: $ZOMBIE_PID..."
+                  echo "  Убиваем процесс PID: $ZOMBIE_PID..."
                   sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
                 done
                 sleep 2
@@ -320,10 +320,10 @@ jobs:
               if [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔙 Откатываемся к предыдущей версии из-за проблем с healthcheck"
                 
-                # Убиваем все процессы-зомби на хосте
+                # Очищаем процессы на хосте (на случай старой конфигурации)
                 ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
                 if [ -n "$ZOMBIE_PIDS" ]; then
-                  echo "  Убиваем процессы-зомби: $ZOMBIE_PIDS"
+                  echo "  Очищаем процессы на хосте: $ZOMBIE_PIDS"
                   for ZOMBIE_PID in $ZOMBIE_PIDS; do
                     sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
                   done
@@ -466,10 +466,10 @@ jobs:
               if [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
                 
-                # Убиваем все процессы-зомби на хосте
+                # Очищаем процессы на хосте (на случай старой конфигурации)
                 ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
                 if [ -n "$ZOMBIE_PIDS" ]; then
-                  echo "  Убиваем процессы-зомби: $ZOMBIE_PIDS"
+                  echo "  Очищаем процессы на хосте: $ZOMBIE_PIDS"
                   for ZOMBIE_PID in $ZOMBIE_PIDS; do
                     sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
                   done

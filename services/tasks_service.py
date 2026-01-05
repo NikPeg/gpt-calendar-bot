@@ -135,6 +135,7 @@ class TasksService(GoogleServiceBase):
             Созданная задача или None при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Tasks service not initialized")
             return None
 
         try:
@@ -142,6 +143,7 @@ class TasksService(GoogleServiceBase):
             if not tasklist_id:
                 tasklist_id = self.get_default_tasklist_id()
                 if not tasklist_id:
+                    logger.error("GOOGLE_API: Could not get default tasklist_id")
                     return None
 
             # Формируем задачу
@@ -154,18 +156,25 @@ class TasksService(GoogleServiceBase):
                 # Убеждаемся, что дата в формате RFC3339
                 task["due"] = self._ensure_rfc3339_format(due)
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Creating task in tasklist '{tasklist_id}': "
+                f"title='{title}', due={due}"
+            )
+
             # Создаем задачу
             created_task = (
                 self.service.tasks().insert(tasklist=tasklist_id, body=task).execute()
             )
 
-            logger.info(f"Task created: {created_task.get('id')}")
+            task_id = created_task.get("id", "")
+            logger.info(f"GOOGLE_API: ✅ Task created successfully: id={task_id}")
             return created_task
         except HttpError as e:
-            logger.error(f"Error creating task: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error creating task: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error creating task: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error creating task: {e}")
             return None
 
     def list_tasks(
@@ -188,6 +197,7 @@ class TasksService(GoogleServiceBase):
             Список задач
         """
         if not self.service:
+            logger.error("GOOGLE_API: Tasks service not initialized")
             return []
 
         try:
@@ -195,6 +205,7 @@ class TasksService(GoogleServiceBase):
             if not tasklist_id:
                 tasklist_id = self.get_default_tasklist_id()
                 if not tasklist_id:
+                    logger.error("GOOGLE_API: Could not get default tasklist_id")
                     return []
 
             # Параметры запроса
@@ -209,14 +220,22 @@ class TasksService(GoogleServiceBase):
             if show_hidden:
                 params["showHidden"] = True
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Listing tasks from tasklist '{tasklist_id}': "
+                f"max_results={max_results}, show_completed={show_completed}"
+            )
+
             # Получаем задачи
             results = self.service.tasks().list(**params).execute()
-            return results.get("items", [])
+            tasks = results.get("items", [])
+            logger.info(f"GOOGLE_API: ✅ Found {len(tasks)} tasks")
+            return tasks
         except HttpError as e:
-            logger.error(f"Error listing tasks: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error listing tasks: {e}")
             return []
         except Exception as e:
-            logger.error(f"Unexpected error listing tasks: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error listing tasks: {e}")
             return []
 
     def get_task(
@@ -276,6 +295,7 @@ class TasksService(GoogleServiceBase):
             Обновленная задача или None при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Tasks service not initialized")
             return None
 
         try:
@@ -283,11 +303,13 @@ class TasksService(GoogleServiceBase):
             if not tasklist_id:
                 tasklist_id = self.get_default_tasklist_id()
                 if not tasklist_id:
+                    logger.error("GOOGLE_API: Could not get default tasklist_id")
                     return None
 
             # Получаем существующую задачу
             task = self.get_task(task_id, tasklist_id)
             if not task:
+                logger.error(f"GOOGLE_API: Task {task_id} not found")
                 return None
 
             # Обновляем поля
@@ -300,6 +322,12 @@ class TasksService(GoogleServiceBase):
             if status is not None:
                 task["status"] = status
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Updating task {task_id} in tasklist '{tasklist_id}': "
+                f"title={title}, status={status}, due={due}"
+            )
+
             # Обновляем задачу
             updated_task = (
                 self.service.tasks()
@@ -307,13 +335,13 @@ class TasksService(GoogleServiceBase):
                 .execute()
             )
 
-            logger.info(f"Task updated: {task_id}")
+            logger.info(f"GOOGLE_API: ✅ Task updated successfully: id={task_id}")
             return updated_task
         except HttpError as e:
-            logger.error(f"Error updating task: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error updating task {task_id}: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error updating task: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error updating task {task_id}: {e}")
             return None
 
     def delete_task(self, task_id: str, tasklist_id: str | None = None) -> bool:
@@ -328,6 +356,7 @@ class TasksService(GoogleServiceBase):
             True если успешно, False при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Tasks service not initialized")
             return False
 
         try:
@@ -335,17 +364,23 @@ class TasksService(GoogleServiceBase):
             if not tasklist_id:
                 tasklist_id = self.get_default_tasklist_id()
                 if not tasklist_id:
+                    logger.error("GOOGLE_API: Could not get default tasklist_id")
                     return False
+
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Deleting task {task_id} from tasklist '{tasklist_id}'"
+            )
 
             self.service.tasks().delete(tasklist=tasklist_id, task=task_id).execute()
 
-            logger.info(f"Task deleted: {task_id}")
+            logger.info(f"GOOGLE_API: ✅ Task deleted successfully: id={task_id}")
             return True
         except HttpError as e:
-            logger.error(f"Error deleting task: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error deleting task {task_id}: {e}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error deleting task: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error deleting task {task_id}: {e}")
             return False
 
     def complete_task(

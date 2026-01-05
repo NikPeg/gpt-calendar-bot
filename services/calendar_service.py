@@ -190,11 +190,13 @@ class CalendarService(GoogleServiceBase):
             Созданное событие или None при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Calendar service not initialized")
             return None
 
         try:
             calendar_id = self.get_calendar_id(user_email)
             if not calendar_id:
+                logger.error(f"GOOGLE_API: Could not get calendar_id for {user_email}")
                 return None
 
             # Формируем событие
@@ -226,6 +228,13 @@ class CalendarService(GoogleServiceBase):
                     "timeZone": "UTC",
                 }
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Creating event in calendar '{calendar_id}': "
+                f"summary='{summary}', start={start_datetime}, end={end_datetime}, "
+                f"recurrence={recurrence}"
+            )
+
             # Создаем событие
             created_event = (
                 self.service.events()
@@ -233,13 +242,14 @@ class CalendarService(GoogleServiceBase):
                 .execute()
             )
 
-            logger.info(f"Event created: {created_event.get('id')}")
+            event_id = created_event.get("id", "")
+            logger.info(f"GOOGLE_API: ✅ Event created successfully: id={event_id}")
             return created_event
         except HttpError as e:
-            logger.error(f"Error creating event: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error creating event: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error creating event: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error creating event: {e}")
             return None
 
     def list_events(
@@ -262,11 +272,13 @@ class CalendarService(GoogleServiceBase):
             Список событий
         """
         if not self.service:
+            logger.error("GOOGLE_API: Calendar service not initialized")
             return []
 
         try:
             calendar_id = self.get_calendar_id(user_email)
             if not calendar_id:
+                logger.error(f"GOOGLE_API: Could not get calendar_id for {user_email}")
                 return []
 
             # Параметры запроса
@@ -289,14 +301,23 @@ class CalendarService(GoogleServiceBase):
                 # Убеждаемся, что дата в формате RFC3339 с timezone
                 params["timeMax"] = self._ensure_rfc3339_format(time_max)
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Listing events from calendar '{calendar_id}': "
+                f"max_results={max_results}, time_min={params.get('timeMin')}, "
+                f"time_max={params.get('timeMax')}"
+            )
+
             # Получаем события
             events_result = self.service.events().list(**params).execute()
-            return events_result.get("items", [])
+            events = events_result.get("items", [])
+            logger.info(f"GOOGLE_API: ✅ Found {len(events)} events")
+            return events
         except HttpError as e:
-            logger.error(f"Error listing events: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error listing events: {e}")
             return []
         except Exception as e:
-            logger.error(f"Unexpected error listing events: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error listing events: {e}")
             return []
 
     def list_events_from_calendar(
@@ -457,16 +478,19 @@ class CalendarService(GoogleServiceBase):
             Обновленное событие или None при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Calendar service not initialized")
             return None
 
         try:
             calendar_id = self.get_calendar_id(user_email)
             if not calendar_id:
+                logger.error(f"GOOGLE_API: Could not get calendar_id for {user_email}")
                 return None
 
             # Получаем существующее событие
             event = self.get_event(user_email, event_id)
             if not event:
+                logger.error(f"GOOGLE_API: Event {event_id} not found")
                 return None
 
             # Обновляем поля
@@ -481,6 +505,12 @@ class CalendarService(GoogleServiceBase):
             if end_datetime:
                 event["end"] = {"dateTime": end_datetime, "timeZone": "UTC"}
 
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Updating event {event_id} in calendar '{calendar_id}': "
+                f"summary={summary}, start={start_datetime}, end={end_datetime}"
+            )
+
             # Обновляем событие
             updated_event = (
                 self.service.events()
@@ -488,13 +518,13 @@ class CalendarService(GoogleServiceBase):
                 .execute()
             )
 
-            logger.info(f"Event updated: {event_id}")
+            logger.info(f"GOOGLE_API: ✅ Event updated successfully: id={event_id}")
             return updated_event
         except HttpError as e:
-            logger.error(f"Error updating event: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error updating event {event_id}: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error updating event: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error updating event {event_id}: {e}")
             return None
 
     def delete_event(self, user_email: str, event_id: str) -> bool:
@@ -509,22 +539,29 @@ class CalendarService(GoogleServiceBase):
             True если успешно, False при ошибке
         """
         if not self.service:
+            logger.error("GOOGLE_API: Calendar service not initialized")
             return False
 
         try:
             calendar_id = self.get_calendar_id(user_email)
             if not calendar_id:
+                logger.error(f"GOOGLE_API: Could not get calendar_id for {user_email}")
                 return False
+
+            # Логируем вызов API
+            logger.info(
+                f"GOOGLE_API: Deleting event {event_id} from calendar '{calendar_id}'"
+            )
 
             self.service.events().delete(
                 calendarId=calendar_id, eventId=event_id
             ).execute()
 
-            logger.info(f"Event deleted: {event_id}")
+            logger.info(f"GOOGLE_API: ✅ Event deleted successfully: id={event_id}")
             return True
         except HttpError as e:
-            logger.error(f"Error deleting event: {e}")
+            logger.error(f"GOOGLE_API: ❌ HTTP Error deleting event {event_id}: {e}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error deleting event: {e}")
+            logger.error(f"GOOGLE_API: ❌ Unexpected error deleting event {event_id}: {e}")
             return False

@@ -3,7 +3,6 @@
 Реализация на основе паттерна Command для чистой архитектуры.
 """
 
-import json
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
@@ -238,16 +237,32 @@ class CalendarContext:
         conversation = Conversation(user_id)
         await conversation.get_from_db()
 
-        if not conversation.service_account_json:
-            logger.error(f"USER{user_id}: Service account not configured")
+        # Проверяем, настроен ли OAuth
+        if not conversation.oauth_access_token:
+            logger.error(f"USER{user_id}: Google Calendar not connected via OAuth")
             return None
 
-        # Создаем сервис календаря
-        calendar_service = CalendarService(conversation.service_account_json)
+        # Создаем сервис календаря через OAuth
+        from core.config import GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+        calendar_service = CalendarService(
+            access_token=conversation.oauth_access_token,
+            refresh_token=conversation.oauth_refresh_token,
+            token_expiry=conversation.oauth_token_expiry,
+            client_id=GOOGLE_OAUTH_CLIENT_ID,
+            client_secret=GOOGLE_OAUTH_CLIENT_SECRET,
+        )
 
         if not calendar_service.is_configured():
             logger.error(f"USER{user_id}: Calendar service not configured properly")
             return None
+
+        # Проверяем и сохраняем обновленные токены если они изменились
+        updated_tokens = calendar_service.get_updated_tokens()
+        if updated_tokens["access_token"] != conversation.oauth_access_token:
+            conversation.oauth_access_token = updated_tokens["access_token"]
+            conversation.oauth_token_expiry = updated_tokens["token_expiry"]
+            await conversation.update_in_db()
+            logger.debug(f"USER{user_id}: OAuth tokens updated in database")
 
         # Получаем основной календарь
         primary_calendar = await UserCalendar.get_primary_calendar(user_id)
@@ -294,7 +309,7 @@ class CalendarContext:
         user_id: int, conversation: Conversation, calendar_service: CalendarService
     ) -> str | None:
         """
-        Определяет email пользователя.
+        Определяет email пользователя через OAuth.
 
         Args:
             user_id: ID пользователя
@@ -305,52 +320,39 @@ class CalendarContext:
             Email пользователя или None
         """
         try:
-            user_email = conversation.user_email
-
-            # Если email не сохранен, пытаемся определить из доступных календарей
-            if not user_email:
-                logger.warning(
-                    f"USER{user_id}: user_email not found in database, trying to detect automatically"
-                )
-                service_account_data = json.loads(conversation.service_account_json)
-                service_account_email = service_account_data.get("client_email", "")
-
+            # Пытаемся получить primary календарь через OAuth
+            # Primary календарь всегда доступен и его ID - это email пользователя
+            if calendar_service.service:
                 try:
-                    # Получаем список доступных календарей
-                    calendar_list = (
-                        calendar_service.service.calendarList().list().execute()
-                    )
+                    calendar_list = calendar_service.service.calendarList().list().execute()
                     calendars = calendar_list.get("items", [])
-
-                    # Ищем календарь пользователя (Gmail календари обычно имеют email как ID)
+                    
+                    # Ищем primary календарь
                     for cal in calendars:
-                        cal_id = cal.get("id", "")
-                        # Если ID календаря - это Gmail адрес (не сервисный аккаунт)
-                        if (
-                            "@gmail.com" in cal_id.lower()
-                            and service_account_email.lower() not in cal_id.lower()
-                        ):
-                            user_email = cal_id
-                            logger.info(
-                                f"USER{user_id}: Auto-detected user email: {user_email}"
-                            )
-                            # Сохраняем найденный email в БД
+                        if cal.get("primary", False):
+                            user_email = cal.get("id")
+                            logger.info(f"USER{user_id}: Detected user email from primary calendar: {user_email}")
+                            # Сохраняем email в БД если его там нет
+                            if not conversation.user_email:
+                                conversation.user_email = user_email
+                                await conversation.update_in_db()
+                            return user_email
+                    
+                    # Если primary не найден, берем первый доступный
+                    if calendars:
+                        user_email = calendars[0].get("id")
+                        logger.info(f"USER{user_id}: Using first available calendar: {user_email}")
+                        if not conversation.user_email:
                             conversation.user_email = user_email
                             await conversation.update_in_db()
-                            break
+                        return user_email
+                        
                 except Exception as e:
-                    logger.debug(f"Could not detect user email from calendar list: {e}")
-
-                # Если не нашли, используем email сервисного аккаунта
-                if not user_email:
-                    user_email = service_account_email
-                    logger.warning(
-                        f"USER{user_id}: Using service account email as fallback: {user_email}"
-                    )
-            else:
-                logger.debug(f"USER{user_id}: Using saved user email: {user_email}")
-
-            return user_email
+                    logger.error(f"USER{user_id}: Error getting calendar list: {e}")
+            
+            logger.error(f"USER{user_id}: Could not determine user email")
+            return None
+            
         except Exception as e:
             logger.error(f"Error getting user email: {e}")
             return None

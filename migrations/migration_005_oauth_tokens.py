@@ -1,7 +1,8 @@
 """
 Миграция: переход на OAuth 2.0 для Google API.
 
-Удаляет старые поля service_account_json и user_email.
+Удаляет поле service_account_json (больше не используется).
+Сохраняет поле user_email (для кеширования email пользователя).
 Добавляет новые поля для OAuth токенов.
 """
 
@@ -48,22 +49,24 @@ async def migrate(conn: aiosqlite.Connection) -> str:
                     subscription_verified INTEGER,
                     referral_code TEXT,
                     timezone_offset INTEGER DEFAULT 3,
+                    user_email TEXT,
                     oauth_access_token TEXT,
                     oauth_refresh_token TEXT,
                     oauth_token_expiry TEXT
                 )
             """)
 
-            # Копируем данные (без старых полей)
+            # Копируем данные (сохраняем user_email, удаляем только service_account_json)
             await conn.execute("""
                 INSERT INTO conversations_new (
                     id, name, active_messages_count,
-                    subscription_verified, referral_code, timezone_offset
+                    subscription_verified, referral_code, timezone_offset, user_email
                 )
                 SELECT
                     id, name, active_messages_count,
                     subscription_verified, referral_code,
-                    COALESCE(timezone_offset, 3)
+                    COALESCE(timezone_offset, 3),
+                    user_email
                 FROM conversations
             """)
 
@@ -71,7 +74,8 @@ async def migrate(conn: aiosqlite.Connection) -> str:
             await conn.execute("DROP TABLE conversations")
             await conn.execute("ALTER TABLE conversations_new RENAME TO conversations")
 
-            messages.append("✅ Удалены поля service_account_json и user_email")
+            messages.append("✅ Удалено поле service_account_json")
+            messages.append("✅ Сохранено поле user_email")
             messages.append("✅ Добавлены поля для OAuth токенов")
         else:
             # Просто добавляем новые поля если старых нет

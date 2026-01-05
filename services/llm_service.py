@@ -22,6 +22,10 @@ from services.calendar_functions import (
     execute_calendar_function,
 )
 from services.llm_client import send_image_to_vision_model, send_request_to_openrouter
+from services.tasks_functions import (
+    TASKS_FUNCTIONS,
+    execute_tasks_function,
+)
 
 
 def log_prompt(chat_id: int, prompt: list[dict], prompt_type: str = "MESSAGE"):
@@ -90,25 +94,44 @@ async def get_llm_response(
     else:
         system_content = system_content.replace("{USERNAME}", "")
 
-    # Добавляем информацию о календаре, если он настроен
-    if conversation.service_account_json:
-        calendar_info = (
-            "\n\nТы можешь управлять Google Calendar пользователя. "
-            "Доступны следующие функции:\n"
-            "- create_calendar_event: создание событий\n"
+    # Добавляем информацию о календаре и задачах, если настроен OAuth
+    if conversation.oauth_access_token:
+        calendar_tasks_info = (
+            "\n\n=== УПРАВЛЕНИЕ GOOGLE CALENDAR И TASKS ===\n\n"
+            "Ты можешь управлять Google Calendar и Google Tasks пользователя.\n\n"
+            
+            "📅 ФУНКЦИИ КАЛЕНДАРЯ:\n"
+            "- create_calendar_event: создание событий в календаре\n"
             "- list_calendar_events: просмотр событий\n"
-            "- get_calendar_event: получение информации о событии\n"
+            "- get_calendar_event: получение информации о конкретном событии\n"
             "- update_calendar_event: изменение событий\n"
             "- delete_calendar_event: удаление событий\n\n"
-            "КРИТИЧЕСКИ ВАЖНО для работы с календарем:\n"
-            "1. Для удаления или изменения события ВСЕГДА сначала используй list_calendar_events для получения списка событий\n"
-            "2. Найди нужное событие в списке и возьми его реальный ID (это уникальная строка типа 'abc123xyz')\n"
-            "3. Используй delete_calendar_event или update_calendar_event с полученным ID\n"
-            "4. НИКОГДА не используй название события (например, 'Обед') как event_id - это должен быть реальный ID из списка событий!\n"
-            "5. Ты можешь делать несколько вызовов функций подряд: сначала list_calendar_events, затем delete_calendar_event\n\n"
-            "Используй эти функции для управления календарем пользователя."
+            
+            "📝 ФУНКЦИИ ЗАДАЧ (GOOGLE TASKS):\n"
+            "- create_task: создание задачи\n"
+            "- list_tasks: просмотр списка задач\n"
+            "- get_task: получение информации о конкретной задаче\n"
+            "- update_task: изменение задачи (название, описание, срок, статус)\n"
+            "- complete_task: пометить задачу как выполненную\n"
+            "- delete_task: удаление задачи\n\n"
+            
+            "🔑 РАЗЛИЧИЯ МЕЖДУ СОБЫТИЯМИ И ЗАДАЧАМИ:\n"
+            "• События (Calendar Events): имеют точное время начала и окончания, подходят для встреч, напоминаний с фиксированным временем\n"
+            "• Задачи (Tasks): имеют только дедлайн (срок выполнения), подходят для TODO-списков, задач без точного времени\n"
+            "• Задачи можно помечать как выполненные (complete_task), события нужно удалять\n"
+            "• Задачи имеют статусы: 'needsAction' (активная) и 'completed' (выполнена)\n\n"
+            
+            "⚠️ КРИТИЧЕСКИ ВАЖНО:\n"
+            "1. Для удаления/изменения события ВСЕГДА сначала используй list_calendar_events для получения его ID\n"
+            "2. Для удаления/изменения задачи ВСЕГДА сначала используй list_tasks для получения её ID\n"
+            "3. НИКОГДА не используй название ('Купить молоко') как ID - используй реальный ID из списка!\n"
+            "4. Ты можешь делать несколько вызовов подряд: сначала list_tasks, затем complete_task\n"
+            "5. Если пользователь просит 'добавить задачу' - используй create_task, если 'создать событие' - create_calendar_event\n"
+            "6. Если неясно что нужно (событие или задача), спроси у пользователя или используй задачу по умолчанию\n\n"
+            
+            "Используй эти функции для управления календарем и задачами пользователя."
         )
-        system_content += calendar_info
+        system_content += calendar_tasks_info
 
     # Формируем финальный промпт: системный промпт ПЕРВЫМ, затем история сообщений
     prompt_for_request = [
@@ -128,12 +151,13 @@ async def get_llm_response(
     # Логируем промпт перед отправкой
     log_prompt(chat_id, prompt_for_request, "MESSAGE")
 
-    # Проверяем, настроен ли календарь для function calling
+    # Проверяем, настроен ли календарь и задачи для function calling (OAuth)
     conversation_for_functions = Conversation(chat_id)
     await conversation_for_functions.get_from_db()
     functions = None
-    if conversation_for_functions.service_account_json:
-        functions = CALENDAR_FUNCTIONS
+    if conversation_for_functions.oauth_access_token:
+        # Объединяем функции календаря и задач
+        functions = CALENDAR_FUNCTIONS + TASKS_FUNCTIONS
 
     # Запрашиваем ответ от LLM
     try:
@@ -224,10 +248,15 @@ async def _process_llm_response(
                 f"LLM{chat_id}: Calling function {function_name} with args: {function_args} (iteration {iteration + 1}/{max_iterations})"
             )
 
-            # Выполняем функцию
-            result = await execute_calendar_function(
-                function_name, function_args, chat_id
-            )
+            # Выполняем функцию (calendar или tasks)
+            if function_name.startswith(("create_task", "list_task", "get_task", "update_task", "delete_task", "complete_task")):
+                result = await execute_tasks_function(
+                    function_name, function_args, chat_id
+                )
+            else:
+                result = await execute_calendar_function(
+                    function_name, function_args, chat_id
+                )
 
             function_results.append(
                 {
@@ -548,19 +577,36 @@ async def process_user_video(
         else:
             system_content = system_content.replace("{USERNAME}", "")
 
-        # Добавляем информацию о календаре, если он настроен
-        if conversation.service_account_json:
-            calendar_info = (
-                "\n\nТы можешь управлять Google Calendar пользователя. "
-                "Доступны следующие функции:\n"
-                "- create_calendar_event: создание событий\n"
+        # Добавляем информацию о календаре и задачах, если настроен OAuth
+        if conversation.oauth_access_token:
+            calendar_tasks_info = (
+                "\n\n=== УПРАВЛЕНИЕ GOOGLE CALENDAR И TASKS ===\n\n"
+                "Ты можешь управлять Google Calendar и Google Tasks пользователя.\n\n"
+                
+                "📅 ФУНКЦИИ КАЛЕНДАРЯ:\n"
+                "- create_calendar_event: создание событий в календаре\n"
                 "- list_calendar_events: просмотр событий\n"
-                "- get_calendar_event: получение информации о событии\n"
+                "- get_calendar_event: получение информации о конкретном событии\n"
                 "- update_calendar_event: изменение событий\n"
                 "- delete_calendar_event: удаление событий\n\n"
-                "Используй эти функции для управления календарем пользователя."
+                
+                "📝 ФУНКЦИИ ЗАДАЧ (GOOGLE TASKS):\n"
+                "- create_task: создание задачи\n"
+                "- list_tasks: просмотр списка задач\n"
+                "- get_task: получение информации о конкретной задаче\n"
+                "- update_task: изменение задачи (название, описание, срок, статус)\n"
+                "- complete_task: пометить задачу как выполненную\n"
+                "- delete_task: удаление задачи\n\n"
+                
+                "🔑 РАЗЛИЧИЯ МЕЖДУ СОБЫТИЯМИ И ЗАДАЧАМИ:\n"
+                "• События (Calendar Events): имеют точное время начала и окончания, подходят для встреч, напоминаний с фиксированным временем\n"
+                "• Задачи (Tasks): имеют только дедлайн (срок выполнения), подходят для TODO-списков, задач без точного времени\n"
+                "• Задачи можно помечать как выполненные (complete_task), события нужно удалять\n"
+                "• Задачи имеют статусы: 'needsAction' (активная) и 'completed' (выполнена)\n\n"
+                
+                "Используй эти функции для управления календарем и задачами пользователя."
             )
-            system_content += calendar_info
+            system_content += calendar_tasks_info
 
         prompt_for_request = [
             {

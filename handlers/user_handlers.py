@@ -148,8 +148,8 @@ async def cmd_start(message: types.Message):
     conversation = Conversation(user_id)
     await conversation.get_from_db()
 
-    # Проверяем, настроен ли календарь
-    if not conversation.service_account_json or not conversation.user_email:
+    # Проверяем, настроен ли календарь (OAuth)
+    if not conversation.oauth_access_token:
         # Календарь не настроен - показываем инструкцию по настройке
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[

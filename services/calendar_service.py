@@ -15,9 +15,10 @@ from services.google_service_oauth import GoogleServiceOAuth
 class CalendarService(GoogleServiceBase):
     """Сервис для работы с Google Calendar через OAuth 2.0."""
 
-    # Scope для Calendar API
+    # Scope для Calendar API (Tasks scope добавлен для совместимости)
     SCOPES = [
         "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/tasks",
     ]
 
     def __init__(

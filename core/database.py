@@ -38,6 +38,7 @@ class Conversation:
         subscription_verified=None,
         referral_code=None,
         timezone_offset=None,
+        user_email=None,
         oauth_access_token=None,
         oauth_refresh_token=None,
         oauth_token_expiry=None,
@@ -48,17 +49,18 @@ class Conversation:
         self.subscription_verified = subscription_verified
         self.referral_code = referral_code
         self.timezone_offset = timezone_offset
+        self.user_email = user_email
         self.oauth_access_token = oauth_access_token
         self.oauth_refresh_token = oauth_refresh_token
         self.oauth_token_expiry = oauth_token_expiry
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, timezone_offset={self.timezone_offset}, oauth_tokens={'***' if self.oauth_access_token else None})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, timezone_offset={self.timezone_offset}, user_email={self.user_email}, oauth_tokens={'***' if self.oauth_access_token else None})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -68,14 +70,15 @@ class Conversation:
                 self.subscription_verified = row[3]
                 self.referral_code = row[4]
                 self.timezone_offset = row[5] if len(row) > 5 else None
-                self.oauth_access_token = row[6] if len(row) > 6 else None
-                self.oauth_refresh_token = row[7] if len(row) > 7 else None
-                self.oauth_token_expiry = row[8] if len(row) > 8 else None
+                self.user_email = row[6] if len(row) > 6 else None
+                self.oauth_access_token = row[7] if len(row) > 7 else None
+                self.oauth_refresh_token = row[8] if len(row) > 8 else None
+                self.oauth_token_expiry = row[9] if len(row) > 9 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -86,9 +89,10 @@ class Conversation:
                     subscription_verified=row[3],
                     referral_code=row[4],
                     timezone_offset=row[5] if len(row) > 5 else None,
-                    oauth_access_token=row[6] if len(row) > 6 else None,
-                    oauth_refresh_token=row[7] if len(row) > 7 else None,
-                    oauth_token_expiry=row[8] if len(row) > 8 else None,
+                    user_email=row[6] if len(row) > 6 else None,
+                    oauth_access_token=row[7] if len(row) > 7 else None,
+                    oauth_refresh_token=row[8] if len(row) > 8 else None,
+                    oauth_token_expiry=row[9] if len(row) > 9 else None,
                 )
             return None
 
@@ -104,8 +108,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -114,6 +118,7 @@ class Conversation:
                 self.subscription_verified,
                 self.referral_code,
                 self.timezone_offset,
+                self.user_email,
                 self.oauth_access_token,
                 self.oauth_refresh_token,
                 self.oauth_token_expiry,
@@ -208,7 +213,8 @@ class Conversation:
             cursor = await db.cursor()
             sql_query = """
                 UPDATE conversations
-                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, service_account_json = ?, user_email = ?, timezone_offset = ?
+                SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, timezone_offset = ?,
+                    user_email = ?, oauth_access_token = ?, oauth_refresh_token = ?, oauth_token_expiry = ?
                 WHERE id = ?
             """
             values = (
@@ -216,9 +222,11 @@ class Conversation:
                 self.active_messages_count,
                 self.subscription_verified,
                 self.referral_code,
-                self.service_account_json,
-                self.user_email,
                 self.timezone_offset,
+                self.user_email,
+                self.oauth_access_token,
+                self.oauth_refresh_token,
+                self.oauth_token_expiry,
                 self.id,
             )
             await cursor.execute(sql_query, values)

@@ -142,22 +142,6 @@ jobs:
             # Останавливаем и удаляем текущий контейнер
             echo "⏸️  Останавливаем текущий контейнер..."
             
-            # ПРИМЕЧАНИЕ: С bridge network процессы изолированы в контейнере и автоматически завершаются
-            # Но оставляем проверку на случай, если остались процессы от старой конфигурации (network_mode: host)
-            echo "🔍 Проверяем наличие процессов python -u main.py на хосте (на случай старой конфигурации)..."
-            ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-            if [ -n "$ZOMBIE_PIDS" ]; then
-              echo "⚠️  Найдены процессы на хосте (возможно, от старой конфигурации): $ZOMBIE_PIDS"
-              for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                echo "  Убиваем процесс PID: $ZOMBIE_PID..."
-                sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-              done
-              sleep 2
-              echo "✅ Процессы очищены"
-            else
-              echo "✅ Процессы на хосте не найдены (ожидаемо для bridge network)"
-            fi
-            
             # Получаем ID всех контейнеров с именем gpt-calendar-bot (включая остановленные)
             CONTAINER_IDS=$(docker ps -a --filter name=gpt-calendar-bot --format "{{.ID}}" || true)
             
@@ -214,19 +198,6 @@ jobs:
             # Функция для запуска контейнера через docker-compose
             start_container() {
               echo "🚀 Запускаем контейнер через docker-compose..."
-              
-              # ПРИМЕЧАНИЕ: С bridge network процессы изолированы, но оставляем проверку
-              # на случай остатков от старой конфигурации
-              echo "🔍 Финальная проверка процессов на хосте..."
-              ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-              if [ -n "$ZOMBIE_PIDS" ]; then
-                echo "⚠️  Найдены процессы на хосте перед запуском: $ZOMBIE_PIDS"
-                for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                  echo "  Убиваем процесс PID: $ZOMBIE_PID..."
-                  sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-                done
-                sleep 2
-              fi
               
               # Убеждаемся что старый контейнер полностью убит
               OLD_CONTAINERS=$(docker ps -a --filter name=gpt-calendar-bot --format "{{.ID}}" || true)
@@ -320,16 +291,6 @@ jobs:
               if [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔙 Откатываемся к предыдущей версии из-за проблем с healthcheck"
                 
-                # Очищаем процессы на хосте (на случай старой конфигурации)
-                ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-                if [ -n "$ZOMBIE_PIDS" ]; then
-                  echo "  Очищаем процессы на хосте: $ZOMBIE_PIDS"
-                  for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                    sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-                  done
-                  sleep 1
-                fi
-                
                 # Получаем PID процесса и убиваем его
                 CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                 if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
@@ -373,16 +334,6 @@ jobs:
                 if [ -n "$CURRENT_IMAGE" ]; then
                   echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
                   
-                  # Убиваем все процессы-зомби на хосте
-                  ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-                  if [ -n "$ZOMBIE_PIDS" ]; then
-                    echo "  Убиваем процессы-зомби: $ZOMBIE_PIDS"
-                    for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                      sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-                    done
-                    sleep 1
-                  fi
-                  
                   # Получаем PID процесса и убиваем его
                   CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                   if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
@@ -418,16 +369,6 @@ jobs:
                 # Откатываемся к стабильной версии
                 if [ -n "$CURRENT_IMAGE" ]; then
                   echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
-                  
-                  # Убиваем все процессы-зомби на хосте
-                  ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-                  if [ -n "$ZOMBIE_PIDS" ]; then
-                    echo "  Убиваем процессы-зомби: $ZOMBIE_PIDS"
-                    for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                      sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-                    done
-                    sleep 1
-                  fi
                   
                   # Получаем PID процесса и убиваем его
                   CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
@@ -465,16 +406,6 @@ jobs:
               # Откатываемся к стабильной версии
               if [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
-                
-                # Очищаем процессы на хосте (на случай старой конфигурации)
-                ZOMBIE_PIDS=$(pgrep -f "python -u main.py" || true)
-                if [ -n "$ZOMBIE_PIDS" ]; then
-                  echo "  Очищаем процессы на хосте: $ZOMBIE_PIDS"
-                  for ZOMBIE_PID in $ZOMBIE_PIDS; do
-                    sudo kill -9 "$ZOMBIE_PID" 2>/dev/null || true
-                  done
-                  sleep 1
-                fi
                 
                 # Получаем PID процесса и убиваем его
                 CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")

@@ -1,9 +1,9 @@
 services:
-  telegram-gpt:
+  gpt-calendar-bot:
     build:
       context: ..
       dockerfile: deployment/Dockerfile
-    container_name: telegram-gpt
+    container_name: gpt-calendar-bot
     restart: unless-stopped
     env_file:
       - ../.env

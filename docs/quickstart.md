@@ -5,7 +5,7 @@
 ```bash
 # 1. Клонируйте репозиторий
 git clone <repository-url>
-cd telegram-gpt
+cd gpt-calendar-bot
 
 # 2. Создайте .env файл
 cp .env.example .env
@@ -47,7 +47,7 @@ docker-compose -f deployment/docker-compose.yml restart
 ```bash
 # 1. Клонируйте и настройте
 git clone <repository-url>
-cd telegram-gpt
+cd gpt-calendar-bot
 cp .env.example .env
 nano .env  # Заполните токены
 

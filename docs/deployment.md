@@ -35,7 +35,7 @@
 
 ```bash
 git clone <repository-url>
-cd telegram-gpt
+cd gpt-calendar-bot
 ```
 
 ### 2. Создание виртуального окружения
@@ -100,7 +100,7 @@ python main.py
 ```bash
 # 1. Клонируйте репозиторий
 git clone <repository-url>
-cd telegram-gpt
+cd gpt-calendar-bot
 
 # 2. Настройте переменные окружения
 cp .env.example .env
@@ -252,8 +252,8 @@ tail -f debug.log
 docker-compose logs -f
 
 # Docker (по имени контейнера)
-docker logs telegram-gpt --tail=100
-docker logs -f telegram-gpt  # в реальном времени
+docker logs gpt-calendar-bot --tail=100
+docker logs -f gpt-calendar-bot  # в реальном времени
 ```
 
 ---
@@ -276,14 +276,14 @@ docker logs -f telegram-gpt  # в реальном времени
 
 ```bash
 # Создайте cron задачу:
-0 3 * * * cp /path/to/telegram-gpt/data/users.db /backups/users-$(date +\%Y\%m\%d).db
+0 3 * * * cp /path/to/gpt-calendar-bot/data/users.db /backups/users-$(date +\%Y\%m\%d).db
 ```
 
 ### Обновления
 
 ```bash
 # Обновите код и перезапустите
-cd telegram-gpt
+cd gpt-calendar-bot
 git pull
 docker-compose up -d --build
 ```

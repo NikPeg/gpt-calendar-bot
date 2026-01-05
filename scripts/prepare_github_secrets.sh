@@ -64,8 +64,8 @@ echo ""
 read -p "Введите Registry ID (crp...) или оставьте пустым для создания нового: " REGISTRY_ID
 
 if [ -z "$REGISTRY_ID" ]; then
-    read -p "Введите имя нового Registry [telegram-gpt-registry]: " REGISTRY_NAME
-    REGISTRY_NAME=${REGISTRY_NAME:-telegram-gpt-registry}
+    read -p "Введите имя нового Registry [gpt-calendar-bot-registry]: " REGISTRY_NAME
+    REGISTRY_NAME=${REGISTRY_NAME:-gpt-calendar-bot-registry}
     
     echo "Создаем Container Registry..."
     REGISTRY_ID=$(yc container registry create --name "$REGISTRY_NAME" --format json | jq -r .id)

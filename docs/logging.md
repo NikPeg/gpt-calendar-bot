@@ -31,7 +31,7 @@ tail -f logs/debug.log
 Консольный вывод контейнера (только ERROR+ и startup сообщения):
 
 ```bash
-docker logs -f telegram-gpt
+docker logs -f gpt-calendar-bot
 # или
 docker-compose logs -f
 ```
@@ -345,9 +345,9 @@ docker-compose logs -f  # в реальном времени
 docker-compose logs --tail=100  # последние 100 строк
 
 # Или напрямую по имени контейнера
-docker logs telegram-gpt
-docker logs -f telegram-gpt  # в реальном времени
-docker logs telegram-gpt --tail=100  # последние 100 строк
+docker logs gpt-calendar-bot
+docker logs -f gpt-calendar-bot  # в реальном времени
+docker logs gpt-calendar-bot --tail=100  # последние 100 строк
 
 # Проверить статус контейнера
 docker ps

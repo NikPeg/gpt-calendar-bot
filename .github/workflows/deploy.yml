@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: cr.yandex
-  IMAGE_NAME: telegram-gpt
+  IMAGE_NAME: gpt-calendar-bot
 
 jobs:
   test:
@@ -83,7 +83,7 @@ jobs:
           username: ${{ secrets.YC_INSTANCE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "deployment/docker-compose.prod.yml"
-          target: "~/telegram-gpt/"
+          target: "~/gpt-calendar-bot/"
           strip_components: 1
 
       - name: Deploy to server via SSH
@@ -113,14 +113,14 @@ jobs:
             echo "🔄 Начинаем деплой..."
 
             # Создаем директории если их нет
-            export DEPLOY_DIR="$HOME/telegram-gpt"
+            export DEPLOY_DIR="$HOME/gpt-calendar-bot"
             mkdir -p "$DEPLOY_DIR/data" "$DEPLOY_DIR/logs"
             echo "📁 Директория деплоя: $DEPLOY_DIR"
 
             # Сохраняем информацию о текущем работающем контейнере
             CURRENT_IMAGE=""
-            if docker ps --filter name=telegram-gpt --format "{{.Image}}" | grep -q .; then
-              CURRENT_IMAGE=$(docker ps --filter name=telegram-gpt --format "{{.Image}}")
+            if docker ps --filter name=gpt-calendar-bot --format "{{.Image}}" | grep -q .; then
+              CURRENT_IMAGE=$(docker ps --filter name=gpt-calendar-bot --format "{{.Image}}")
               echo "📸 Текущий образ: $CURRENT_IMAGE"
 
               # Тегируем текущий образ как stable (резервная копия)
@@ -136,8 +136,8 @@ jobs:
             # Останавливаем и удаляем текущий контейнер
             echo "⏸️  Останавливаем текущий контейнер..."
             
-            # Получаем ID всех контейнеров с именем telegram-gpt (включая остановленные)
-            CONTAINER_IDS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}" || true)
+            # Получаем ID всех контейнеров с именем gpt-calendar-bot (включая остановленные)
+            CONTAINER_IDS=$(docker ps -a --filter name=gpt-calendar-bot --format "{{.ID}}" || true)
             
             if [ -n "$CONTAINER_IDS" ]; then
               echo "🗑️  Найдены контейнеры для удаления: $CONTAINER_IDS"
@@ -163,11 +163,11 @@ jobs:
             fi
             
             # Финальная проверка
-            if docker ps -a --filter name=telegram-gpt --format "{{.Names}}" | grep -q telegram-gpt; then
+            if docker ps -a --filter name=gpt-calendar-bot --format "{{.Names}}" | grep -q gpt-calendar-bot; then
               echo "⚠️  Контейнер все еще существует, применяем экстренные меры..."
               
               # Последняя попытка - убить все процессы и принудительно удалить
-              REMAINING_IDS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}")
+              REMAINING_IDS=$(docker ps -a --filter name=gpt-calendar-bot --format "{{.ID}}")
               for CONTAINER_ID in $REMAINING_IDS; do
                 CONTAINER_PID=$(docker inspect "$CONTAINER_ID" --format '{{.State.Pid}}' 2>/dev/null || echo "")
                 if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
@@ -180,9 +180,9 @@ jobs:
               sleep 2
               
               # Финальная-финальная проверка
-              if docker ps -a --filter name=telegram-gpt --format "{{.Names}}" | grep -q telegram-gpt; then
+              if docker ps -a --filter name=gpt-calendar-bot --format "{{.Names}}" | grep -q gpt-calendar-bot; then
                 echo "❌ ОШИБКА: Контейнер все еще существует после всех попыток!"
-                docker ps -a --filter name=telegram-gpt
+                docker ps -a --filter name=gpt-calendar-bot
                 exit 1
               fi
             fi
@@ -194,7 +194,7 @@ jobs:
               echo "🚀 Запускаем контейнер через docker-compose..."
               
               # Убеждаемся что старый контейнер полностью убит
-              OLD_CONTAINERS=$(docker ps -a --filter name=telegram-gpt --format "{{.ID}}" || true)
+              OLD_CONTAINERS=$(docker ps -a --filter name=gpt-calendar-bot --format "{{.ID}}" || true)
               if [ -n "$OLD_CONTAINERS" ]; then
                 echo "⚠️  Найдены остатки старых контейнеров, удаляем..."
                 for CID in $OLD_CONTAINERS; do
@@ -247,14 +247,14 @@ jobs:
             ELAPSED=0
             
             while [ $ELAPSED -lt $HEALTH_CHECK_TIMEOUT ]; do
-              HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-gpt 2>/dev/null || echo "none")
+              HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' gpt-calendar-bot 2>/dev/null || echo "none")
               
               if [ "$HEALTH_STATUS" = "healthy" ]; then
                 echo "✅ Контейнер здоров (healthy)"
                 break
               elif [ "$HEALTH_STATUS" = "none" ]; then
                 # Контейнер без healthcheck или не запущен
-                if docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt; then
+                if docker ps --filter name=gpt-calendar-bot --filter status=running | grep -q gpt-calendar-bot; then
                   echo "ℹ️  Контейнер работает (healthcheck не настроен)"
                   break
                 else
@@ -269,27 +269,27 @@ jobs:
             done
             
             # Финальная проверка статуса
-            FINAL_HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' telegram-gpt 2>/dev/null || echo "none")
-            CONTAINER_RUNNING=$(docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt && echo "yes" || echo "no")
+            FINAL_HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' gpt-calendar-bot 2>/dev/null || echo "none")
+            CONTAINER_RUNNING=$(docker ps --filter name=gpt-calendar-bot --filter status=running | grep -q gpt-calendar-bot && echo "yes" || echo "no")
             
             if [ "$FINAL_HEALTH_STATUS" != "healthy" ] && [ "$FINAL_HEALTH_STATUS" != "none" ]; then
               echo "❌ Контейнер не прошел healthcheck за ${HEALTH_CHECK_TIMEOUT} секунд!"
               echo "Финальный статус: $FINAL_HEALTH_STATUS"
-              docker logs telegram-gpt --tail=50
+              docker logs gpt-calendar-bot --tail=50
               
               # Откатываемся к стабильной версии
               if [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔙 Откатываемся к предыдущей версии из-за проблем с healthcheck"
                 
                 # Получаем PID процесса и убиваем его
-                CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                 if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
                   sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
                   sleep 1
                 fi
                 
-                docker stop telegram-gpt 2>/dev/null || true
-                docker rm -f telegram-gpt 2>/dev/null || true
+                docker stop gpt-calendar-bot 2>/dev/null || true
+                docker rm -f gpt-calendar-bot 2>/dev/null || true
                 
                 # Перетегируем backup образ как latest для docker-compose
                 echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
@@ -298,7 +298,7 @@ jobs:
                 start_container
                 sleep 10
                 echo "🔄 Откат выполнен. Проверьте логи:"
-                docker logs telegram-gpt --tail=30
+                docker logs gpt-calendar-bot --tail=30
                 exit 1
               else
                 echo "⚠️  Нет предыдущей версии для отката!"
@@ -310,7 +310,7 @@ jobs:
               echo "✅ Контейнер работает"
 
               # Проверяем успешность миграций (или их отсутствие)
-              LOGS=$(docker logs telegram-gpt 2>&1 | tail -100)
+              LOGS=$(docker logs gpt-calendar-bot 2>&1 | tail -100)
 
               # Миграции считаются успешными если:
               # 1. Все миграции применены успешно
@@ -325,14 +325,14 @@ jobs:
                   echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
                   
                   # Получаем PID процесса и убиваем его
-                  CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                  CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                   if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
                     sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
                     sleep 1
                   fi
                   
-                  docker stop telegram-gpt 2>/dev/null || true
-                  docker rm -f telegram-gpt 2>/dev/null || true
+                  docker stop gpt-calendar-bot 2>/dev/null || true
+                  docker rm -f gpt-calendar-bot 2>/dev/null || true
                   
                   # Перетегируем backup образ как latest для docker-compose
                   echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
@@ -341,11 +341,11 @@ jobs:
                   start_container
                   sleep 10
                   echo "🔄 Откат выполнен. Проверьте логи:"
-                  docker logs telegram-gpt --tail=30
+                  docker logs gpt-calendar-bot --tail=30
                   exit 1
                 else
                   echo "⚠️  Нет предыдущей версии для отката!"
-                  docker logs telegram-gpt --tail=50
+                  docker logs gpt-calendar-bot --tail=50
                   exit 1
                 fi
               else
@@ -361,14 +361,14 @@ jobs:
                   echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
                   
                   # Получаем PID процесса и убиваем его
-                  CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                  CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                   if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
                     sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
                     sleep 1
                   fi
                   
-                  docker stop telegram-gpt 2>/dev/null || true
-                  docker rm -f telegram-gpt 2>/dev/null || true
+                  docker stop gpt-calendar-bot 2>/dev/null || true
+                  docker rm -f gpt-calendar-bot 2>/dev/null || true
                   
                   # Перетегируем backup образ как latest для docker-compose
                   echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
@@ -377,18 +377,18 @@ jobs:
                   start_container
                   sleep 10
                   echo "🔄 Откат выполнен. Проверьте логи:"
-                  docker logs telegram-gpt --tail=30
+                  docker logs gpt-calendar-bot --tail=30
                   exit 1
                 else
                   echo "⚠️  Нет предыдущей версии для отката!"
-                  docker logs telegram-gpt --tail=50
+                  docker logs gpt-calendar-bot --tail=50
                   exit 1
                 fi
               else
                 echo "✅ Деплой успешен!"
-                docker logs telegram-gpt --tail=30
+                docker logs gpt-calendar-bot --tail=30
                 echo "📊 Статус контейнера:"
-                docker ps --filter name=telegram-gpt
+                docker ps --filter name=gpt-calendar-bot
               fi
             else
               echo "❌ Контейнер не работает!"
@@ -398,14 +398,14 @@ jobs:
                 echo "🔙 Откатываемся к предыдущей версии: $CURRENT_IMAGE"
                 
                 # Получаем PID процесса и убиваем его
-                CONTAINER_PID=$(docker inspect telegram-gpt --format '{{.State.Pid}}' 2>/dev/null || echo "")
+                CONTAINER_PID=$(docker inspect gpt-calendar-bot --format '{{.State.Pid}}' 2>/dev/null || echo "")
                 if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" != "0" ]; then
                   sudo kill -9 "$CONTAINER_PID" 2>/dev/null || true
                   sleep 1
                 fi
                 
-                docker stop telegram-gpt 2>/dev/null || true
-                docker rm -f telegram-gpt 2>/dev/null || true
+                docker stop gpt-calendar-bot 2>/dev/null || true
+                docker rm -f gpt-calendar-bot 2>/dev/null || true
                 
                 # Перетегируем backup образ как latest для docker-compose
                 echo "📦 Перетегируем $BACKUP_IMAGE -> $NEW_IMAGE"
@@ -414,10 +414,10 @@ jobs:
                 start_container
                 sleep 10
                 echo "🔄 Откат выполнен"
-                docker logs telegram-gpt --tail=30
+                docker logs gpt-calendar-bot --tail=30
               else
               echo "⚠️  Нет предыдущей версии для отката!"
-              docker logs telegram-gpt --tail=50
+              docker logs gpt-calendar-bot --tail=50
               fi
               exit 1
             fi
@@ -432,19 +432,19 @@ jobs:
           script: |
             echo "🔍 Финальная проверка..."
 
-            if docker ps --filter name=telegram-gpt --filter status=running | grep -q telegram-gpt; then
+            if docker ps --filter name=gpt-calendar-bot --filter status=running | grep -q gpt-calendar-bot; then
               echo "✅ Бот работает"
               echo ""
               echo "📊 Информация о контейнере:"
-              docker ps --filter name=telegram-gpt --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+              docker ps --filter name=gpt-calendar-bot --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
               echo ""
               echo "📝 Последние логи:"
-              docker logs telegram-gpt --tail=20
+              docker logs gpt-calendar-bot --tail=20
             else
               echo "❌ ВНИМАНИЕ: Бот не работает!"
               echo ""
               echo "📝 Последние логи:"
-              docker logs telegram-gpt --tail=50 2>&1 || echo "Логи недоступны"
+              docker logs gpt-calendar-bot --tail=50 2>&1 || echo "Логи недоступны"
               exit 1
             fi
 

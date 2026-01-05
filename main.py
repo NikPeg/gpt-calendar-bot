@@ -37,8 +37,16 @@ async def set_bot_commands():
             description="🔄 Сбросить историю диалога и начать общение с чистого листа",
         ),
         BotCommand(
-            command="timezone",
-            description="🕐 Установить часовой пояс (например, /timezone 3 для Москвы)",
+            command="today",
+            description="📅 Показать события и задачи на сегодня",
+        ),
+        BotCommand(
+            command="tomorrow",
+            description="📅 Показать события и задачи на завтра",
+        ),
+        BotCommand(
+            command="week",
+            description="📅 Показать события и задачи на эту неделю",
         ),
     ]
 

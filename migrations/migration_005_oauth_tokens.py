@@ -5,7 +5,7 @@
 Добавляет новые поля для OAuth токенов.
 """
 
-import sqlite3
+import aiosqlite
 
 
 def get_migration_id() -> str:
@@ -18,7 +18,7 @@ def get_migration_description() -> str:
     return "Переход на OAuth 2.0 для Google Calendar и Tasks API"
 
 
-def migrate(conn: sqlite3.Connection) -> str:
+async def migrate(conn: aiosqlite.Connection) -> str:
     """
     Выполняет миграцию.
 
@@ -28,12 +28,11 @@ def migrate(conn: sqlite3.Connection) -> str:
     Returns:
         Сообщение о результате миграции
     """
-    cursor = conn.cursor()
-
     try:
         # Получаем список существующих колонок
-        cursor.execute("PRAGMA table_info(conversations)")
-        columns = {row[1] for row in cursor.fetchall()}
+        async with conn.execute("PRAGMA table_info(conversations)") as cursor:
+            rows = await cursor.fetchall()
+            columns = {row[1] for row in rows}
 
         messages = []
 
@@ -41,7 +40,7 @@ def migrate(conn: sqlite3.Connection) -> str:
         # Нужно пересоздать таблицу
         if "service_account_json" in columns or "user_email" in columns:
             # Создаем временную таблицу с новой структурой
-            cursor.execute("""
+            await conn.execute("""
                 CREATE TABLE conversations_new (
                     id INTEGER PRIMARY KEY,
                     name TEXT,
@@ -56,7 +55,7 @@ def migrate(conn: sqlite3.Connection) -> str:
             """)
 
             # Копируем данные (без старых полей)
-            cursor.execute("""
+            await conn.execute("""
                 INSERT INTO conversations_new (
                     id, name, active_messages_count,
                     subscription_verified, referral_code, timezone_offset
@@ -69,56 +68,57 @@ def migrate(conn: sqlite3.Connection) -> str:
             """)
 
             # Удаляем старую таблицу и переименовываем новую
-            cursor.execute("DROP TABLE conversations")
-            cursor.execute("ALTER TABLE conversations_new RENAME TO conversations")
-            
+            await conn.execute("DROP TABLE conversations")
+            await conn.execute("ALTER TABLE conversations_new RENAME TO conversations")
+
             messages.append("✅ Удалены поля service_account_json и user_email")
             messages.append("✅ Добавлены поля для OAuth токенов")
         else:
             # Просто добавляем новые поля если старых нет
             if "oauth_access_token" not in columns:
-                cursor.execute("""
+                await conn.execute("""
                     ALTER TABLE conversations
                     ADD COLUMN oauth_access_token TEXT DEFAULT NULL
                 """)
                 messages.append("✅ Добавлено поле oauth_access_token")
 
             if "oauth_refresh_token" not in columns:
-                cursor.execute("""
+                await conn.execute("""
                     ALTER TABLE conversations
                     ADD COLUMN oauth_refresh_token TEXT DEFAULT NULL
                 """)
                 messages.append("✅ Добавлено поле oauth_refresh_token")
 
             if "oauth_token_expiry" not in columns:
-                cursor.execute("""
+                await conn.execute("""
                     ALTER TABLE conversations
                     ADD COLUMN oauth_token_expiry TEXT DEFAULT NULL
                 """)
                 messages.append("✅ Добавлено поле oauth_token_expiry")
 
         # Также удаляем таблицу user_calendars если она существует
-        cursor.execute("""
+        async with conn.execute("""
             SELECT name FROM sqlite_master
             WHERE type='table' AND name='user_calendars'
-        """)
-        if cursor.fetchone():
-            cursor.execute("DROP TABLE user_calendars")
-            messages.append("✅ Удалена таблица user_calendars (больше не нужна)")
+        """) as cursor:
+            result = await cursor.fetchone()
+            if result:
+                await conn.execute("DROP TABLE user_calendars")
+                messages.append("✅ Удалена таблица user_calendars (больше не нужна)")
 
-        conn.commit()
-        
+        await conn.commit()
+
         if not messages:
             return "✅ Миграция уже применена"
-        
+
         return "\n".join(messages)
 
     except Exception as e:
-        conn.rollback()
+        await conn.rollback()
         return f"❌ Ошибка миграции: {e}"
 
 
-def rollback(conn: sqlite3.Connection) -> str:
+async def rollback(conn: aiosqlite.Connection) -> str:
     """
     Откатывает миграцию (невозможно полностью).
 

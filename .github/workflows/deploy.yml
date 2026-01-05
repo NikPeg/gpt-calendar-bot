@@ -250,9 +250,9 @@ jobs:
               exit 1
             fi
 
-            # Ждем пока контейнер станет healthy (максимум 60 секунд)
-            echo "⏳ Ожидаем запуска и проверки healthcheck (до 60 секунд)..."
-            HEALTH_CHECK_TIMEOUT=60
+            # Ждем пока контейнер станет healthy (максимум 90 секунд)
+            echo "⏳ Ожидаем запуска и проверки healthcheck (до 90 секунд)..."
+            HEALTH_CHECK_TIMEOUT=90
             HEALTH_CHECK_INTERVAL=5
             ELAPSED=0
             

@@ -12,11 +12,11 @@ services:
       - ./logs:/app/logs
     environment:
       - DATABASE_NAME=/data/users.db
-    # Healthcheck
+    # Healthcheck - проверяем HTTP endpoint OAuth сервера
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep '[p]ython.*main.py' || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 

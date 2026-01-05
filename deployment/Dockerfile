@@ -4,12 +4,14 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Устанавливаем только runtime библиотеки (минимальный набор для opencv-headless)
+# + curl для healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender1 \
     libgomp1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файл зависимостей

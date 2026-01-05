@@ -189,8 +189,10 @@ def create_app() -> web.Application:
 async def start_oauth_server():
     """Запускает OAuth сервер."""
     # Проверяем OAuth credentials
-    oauth_enabled = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
-    
+    oauth_enabled = bool(
+        GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI
+    )
+
     if not oauth_enabled:
         if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
             logger.warning(
@@ -198,15 +200,17 @@ async def start_oauth_server():
                 "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env"
             )
             print("⚠️  OAuth credentials not configured")
-        
+
         if not GOOGLE_REDIRECT_URI:
             logger.warning(
                 "GOOGLE_OAUTH_REDIRECT_URI not configured. "
                 "Set GOOGLE_OAUTH_REDIRECT_URI in .env"
             )
             print("⚠️  OAuth redirect URI not configured")
-        
-        print(f"ℹ️  OAuth server starting in health-check-only mode on port {OAUTH_SERVER_PORT}")
+
+        print(
+            f"ℹ️  OAuth server starting in health-check-only mode on port {OAUTH_SERVER_PORT}"
+        )
         logger.info("OAuth server starting in health-check-only mode")
 
     # Всегда запускаем сервер (для healthcheck)
@@ -224,7 +228,9 @@ async def start_oauth_server():
         print(f"✅ OAuth server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
         print(f"📋 Callback URL: {GOOGLE_REDIRECT_URI}")
     else:
-        logger.info(f"Health-check server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
+        logger.info(
+            f"Health-check server started on http://0.0.0.0:{OAUTH_SERVER_PORT}"
+        )
         print(f"✅ Health-check server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
 
     # Держим сервер запущенным

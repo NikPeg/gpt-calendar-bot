@@ -96,28 +96,30 @@ async def main():
         raise  # Пробрасываем ошибку дальше для перезапуска Docker'ом
     finally:
         print("Останавливаем бота...")
-        
+
         # Отменяем фоновые задачи
         subscription_task.cancel()
         oauth_task.cancel()
-        
+
         # Дожидаемся их завершения
         with contextlib.suppress(asyncio.CancelledError):
             await subscription_task
             await oauth_task
-        
+
         # Закрываем сессию бота
         await bot.session.close()
-        
+
         # Принудительно завершаем все оставшиеся asyncio задачи
-        pending = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+        pending = [
+            task for task in asyncio.all_tasks() if task is not asyncio.current_task()
+        ]
         if pending:
             print(f"Отменяем {len(pending)} оставшихся задач...")
             for task in pending:
                 task.cancel()
             # Ждем завершения с подавлением ошибок отмены
             await asyncio.gather(*pending, return_exceptions=True)
-        
+
         print("✅ Бот остановлен")
 
 

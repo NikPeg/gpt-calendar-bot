@@ -345,13 +345,13 @@ async def cmd_timezone(message: types.Message):
                 )
                 logger.info(f"USER{user_id}: timezone_offset установлен на {offset}")
         except ValueError:
-                sent_msg = await message.answer(
-                    "❌ Неверный формат. Используйте число.\n\n"
-                    "Примеры:\n"
-                    "• /timezone 3 (Москва, UTC+3)\n"
-                    "• /timezone -5 (Нью-Йорк, UTC-5)",
-                    reply_markup=ReplyKeyboardRemove(),
-                )
+            sent_msg = await message.answer(
+                "❌ Неверный формат. Используйте число.\n\n"
+                "Примеры:\n"
+                "• /timezone 3 (Москва, UTC+3)\n"
+                "• /timezone -5 (Нью-Йорк, UTC-5)",
+                reply_markup=ReplyKeyboardRemove(),
+            )
 
     # Не пересылаем сообщения из админ-чата в админ-чат
     if user_id != ADMIN_CHAT:
@@ -365,36 +365,36 @@ async def cmd_today(message: types.Message):
     Команда /today - показать события и задачи на сегодня.
     """
     user_id = message.chat.id
-    
+
     # Игнорируем сообщения из ADMIN_CHAT
     if user_id == ADMIN_CHAT:
         return
-    
+
     logger.info(f"USER{user_id}: команда /today")
     await forward_to_debug(user_id, message.message_id)
-    
+
     # Запускаем индикатор печати
     typing_task = asyncio.create_task(keep_typing(user_id))
-    
+
     try:
         # Формируем запрос к LLM
         query = "перечисли мои события и задачи на сегодня"
-        
+
         # Получаем ответ от LLM
         llm_response, conversation = await get_llm_response(user_id, query)
-        
+
         if llm_response is None:
             await message.answer(
                 "Прости, произошла ошибка при получении информации о событиях и задачах на сегодня. "
                 "Пожалуйста, попробуй снова."
             )
             return
-        
+
         # Сохраняем в контекст и форматируем
         converted_response = await save_to_context_and_format(
             user_id, conversation, query, llm_response
         )
-        
+
         # Отправляем ответ пользователю (с разбивкой на части если нужно)
         start = 0
         while start < len(converted_response):
@@ -411,11 +411,11 @@ async def cmd_today(message: types.Message):
                     exc_info=True,
                 )
                 break
-            
+
             start += 4096
-        
+
         logger.info(f"LLM{user_id} - ответ на /today отправлен")
-    
+
     finally:
         typing_task.cancel()
 
@@ -426,36 +426,36 @@ async def cmd_tomorrow(message: types.Message):
     Команда /tomorrow - показать события и задачи на завтра.
     """
     user_id = message.chat.id
-    
+
     # Игнорируем сообщения из ADMIN_CHAT
     if user_id == ADMIN_CHAT:
         return
-    
+
     logger.info(f"USER{user_id}: команда /tomorrow")
     await forward_to_debug(user_id, message.message_id)
-    
+
     # Запускаем индикатор печати
     typing_task = asyncio.create_task(keep_typing(user_id))
-    
+
     try:
         # Формируем запрос к LLM
         query = "перечисли мои события и задачи на завтра"
-        
+
         # Получаем ответ от LLM
         llm_response, conversation = await get_llm_response(user_id, query)
-        
+
         if llm_response is None:
             await message.answer(
                 "Прости, произошла ошибка при получении информации о событиях и задачах на завтра. "
                 "Пожалуйста, попробуй снова."
             )
             return
-        
+
         # Сохраняем в контекст и форматируем
         converted_response = await save_to_context_and_format(
             user_id, conversation, query, llm_response
         )
-        
+
         # Отправляем ответ пользователю (с разбивкой на части если нужно)
         start = 0
         while start < len(converted_response):
@@ -472,11 +472,11 @@ async def cmd_tomorrow(message: types.Message):
                     exc_info=True,
                 )
                 break
-            
+
             start += 4096
-        
+
         logger.info(f"LLM{user_id} - ответ на /tomorrow отправлен")
-    
+
     finally:
         typing_task.cancel()
 
@@ -487,36 +487,36 @@ async def cmd_week(message: types.Message):
     Команда /week - показать события и задачи на эту неделю.
     """
     user_id = message.chat.id
-    
+
     # Игнорируем сообщения из ADMIN_CHAT
     if user_id == ADMIN_CHAT:
         return
-    
+
     logger.info(f"USER{user_id}: команда /week")
     await forward_to_debug(user_id, message.message_id)
-    
+
     # Запускаем индикатор печати
     typing_task = asyncio.create_task(keep_typing(user_id))
-    
+
     try:
         # Формируем запрос к LLM
         query = "перечисли мои события и задачи на этой неделе"
-        
+
         # Получаем ответ от LLM
         llm_response, conversation = await get_llm_response(user_id, query)
-        
+
         if llm_response is None:
             await message.answer(
                 "Прости, произошла ошибка при получении информации о событиях и задачах на эту неделю. "
                 "Пожалуйста, попробуй снова."
             )
             return
-        
+
         # Сохраняем в контекст и форматируем
         converted_response = await save_to_context_and_format(
             user_id, conversation, query, llm_response
         )
-        
+
         # Отправляем ответ пользователю (с разбивкой на части если нужно)
         start = 0
         while start < len(converted_response):
@@ -533,10 +533,10 @@ async def cmd_week(message: types.Message):
                     exc_info=True,
                 )
                 break
-            
+
             start += 4096
-        
+
         logger.info(f"LLM{user_id} - ответ на /week отправлен")
-    
+
     finally:
         typing_task.cancel()

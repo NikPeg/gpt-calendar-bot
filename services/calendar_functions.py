@@ -42,7 +42,7 @@ CALENDAR_FUNCTIONS = [
                 },
                 "recurrence_rule": {
                     "type": "string",
-                    "description": "Правило повторения события (опционально). Используй значения: 'weekly' для еженедельных событий или 'monthly' для ежемесячных событий. Если параметр не указан, событие будет одноразовым",
+                    "description": "Правило повторения события (опционально). Используй значения: 'weekly' для еженедельных событий, 'biweekly' для событий раз в две недели, 'weekdays' для событий в будние дни (пн-пт) или 'monthly' для ежемесячных событий. Если параметр не указан, событие будет одноразовым",
                 },
             },
             "required": ["summary"],
@@ -426,7 +426,7 @@ class CreateEventCommand(CalendarCommand):
                 # Правило не распознано
                 return json.dumps({
                     "status": "error",
-                    "message": f"❌ Не удалось создать событие: правило повторения '{recurrence_rule}' не поддерживается. Поддерживаются только: weekly, monthly"
+                    "message": f"❌ Не удалось создать событие: правило повторения '{recurrence_rule}' не поддерживается. Поддерживаются только: weekly, biweekly, weekdays, monthly"
                 }, ensure_ascii=False)
 
         # Создаем событие в основном календаре
@@ -462,23 +462,31 @@ class CreateEventCommand(CalendarCommand):
         Преобразует строковое правило повторения в формат RRULE для Google Calendar API.
 
         Args:
-            recurrence_rule: Строковое правило ('weekly', 'monthly')
+            recurrence_rule: Строковое правило ('weekly', 'biweekly', 'weekdays', 'monthly')
 
         Returns:
             Список строк RRULE или None
         """
         rule_lower = recurrence_rule.lower().strip()
 
-        if rule_lower == "weekly":
-            # Еженедельное повторение без даты окончания
-            return ["RRULE:FREQ=WEEKLY;INTERVAL=1"]
-        if rule_lower == "monthly":
-            # Ежемесячное повторение без даты окончания
-            return ["RRULE:FREQ=MONTHLY;INTERVAL=1"]
-        logger.warning(
-            f"Unknown recurrence rule: {recurrence_rule}. Supported: 'weekly', 'monthly'"
-        )
-        return None
+        match rule_lower:
+            case "weekly":
+                # Еженедельное повторение без даты окончания
+                return ["RRULE:FREQ=WEEKLY;INTERVAL=1"]
+            case "biweekly":
+                # Повторение раз в две недели без даты окончания
+                return ["RRULE:FREQ=WEEKLY;INTERVAL=2"]
+            case "weekdays":
+                # Повторение в будние дни (пн-пт)
+                return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"]
+            case "monthly":
+                # Ежемесячное повторение без даты окончания
+                return ["RRULE:FREQ=MONTHLY;INTERVAL=1"]
+            case _:
+                logger.warning(
+                    f"Unknown recurrence rule: {recurrence_rule}. Supported: 'weekly', 'biweekly', 'weekdays', 'monthly'"
+                )
+                return None
 
 
 class ListEventsCommand(CalendarCommand):

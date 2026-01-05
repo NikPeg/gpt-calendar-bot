@@ -35,9 +35,11 @@ async def test_db():
                 active_messages_count INTEGER,
                 subscription_verified INTEGER,
                 referral_code TEXT DEFAULT NULL,
-                service_account_json TEXT DEFAULT NULL,
+                timezone_offset INTEGER DEFAULT NULL,
                 user_email TEXT DEFAULT NULL,
-                timezone_offset INTEGER DEFAULT NULL
+                oauth_access_token TEXT DEFAULT NULL,
+                oauth_refresh_token TEXT DEFAULT NULL,
+                oauth_token_expiry TEXT DEFAULT NULL
             )
         """)
 

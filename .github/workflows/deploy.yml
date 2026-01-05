@@ -31,6 +31,8 @@ jobs:
         run: ruff check .
 
       - name: Run tests
+        env:
+          FILE_LOG_LEVEL: DISABLED
         run: pytest tests/ -v --tb=short
 
       - name: Validate JSON configs

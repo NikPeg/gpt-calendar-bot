@@ -101,6 +101,10 @@ jobs:
           REQUIRED_CHANNELS: ${{ secrets.REQUIRED_CHANNELS || '' }}
           FILE_LOG_LEVEL: ${{ secrets.FILE_LOG_LEVEL || 'INFO' }}
           TELEGRAM_LOG_LEVEL: ${{ secrets.TELEGRAM_LOG_LEVEL || 'DISABLED' }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID || '' }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET || '' }}
+          GOOGLE_OAUTH_REDIRECT_URI: ${{ secrets.GOOGLE_OAUTH_REDIRECT_URI || '' }}
+          OAUTH_SERVER_PORT: ${{ secrets.OAUTH_SERVER_PORT || '8080' }}
           YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
           NEW_IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:latest
           BACKUP_IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/${{ env.IMAGE_NAME }}:stable
@@ -108,7 +112,7 @@ jobs:
           host: ${{ secrets.YC_INSTANCE_IP }}
           username: ${{ secrets.YC_INSTANCE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: TG_TOKEN,LLM_TOKEN,ADMIN_CHAT,MODEL,MAX_CONTEXT,MAX_STORAGE,FEEDBACK_FORM_URL,REQUIRED_CHANNELS,FILE_LOG_LEVEL,TELEGRAM_LOG_LEVEL,YC_REGISTRY_ID,NEW_IMAGE,BACKUP_IMAGE
+          envs: TG_TOKEN,LLM_TOKEN,ADMIN_CHAT,MODEL,MAX_CONTEXT,MAX_STORAGE,FEEDBACK_FORM_URL,REQUIRED_CHANNELS,FILE_LOG_LEVEL,TELEGRAM_LOG_LEVEL,GOOGLE_OAUTH_CLIENT_ID,GOOGLE_OAUTH_CLIENT_SECRET,GOOGLE_OAUTH_REDIRECT_URI,OAUTH_SERVER_PORT,YC_REGISTRY_ID,NEW_IMAGE,BACKUP_IMAGE
           script: |
             set -e  # Остановка при ошибке
 
@@ -225,6 +229,10 @@ jobs:
                 echo "REQUIRED_CHANNELS=$REQUIRED_CHANNELS"
                 echo "FILE_LOG_LEVEL=$FILE_LOG_LEVEL"
                 echo "TELEGRAM_LOG_LEVEL=$TELEGRAM_LOG_LEVEL"
+                echo "GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID"
+                echo "GOOGLE_OAUTH_CLIENT_SECRET=$GOOGLE_OAUTH_CLIENT_SECRET"
+                echo "GOOGLE_OAUTH_REDIRECT_URI=$GOOGLE_OAUTH_REDIRECT_URI"
+                echo "OAUTH_SERVER_PORT=$OAUTH_SERVER_PORT"
                 echo "YC_REGISTRY_ID=$YC_REGISTRY_ID"
               } > "$DEPLOY_DIR/.env"
               

@@ -163,8 +163,21 @@ ADMIN_CHAT=123456789
 DATABASE_NAME=users.db
 MAX_CONTEXT=20
 MAX_STORAGE=100
-
 ```
+
+### Опциональные параметры (OAuth для Google Calendar/Tasks)
+
+Для работы с Google Calendar и Google Tasks нужно настроить OAuth 2.0. Подробная инструкция в [docs/oauth-setup.md](oauth-setup.md).
+
+```env
+# OAuth 2.0 Configuration (опционально)
+GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxxxxxx
+GOOGLE_OAUTH_REDIRECT_URI=https://yourdomain.com/oauth/callback
+OAUTH_SERVER_PORT=8080
+```
+
+**Примечание:** Если OAuth не настроен, бот будет работать без функций Google Calendar и Google Tasks, но все остальные функции будут доступны.
 
 ### Рекомендуемые модели LLM
 

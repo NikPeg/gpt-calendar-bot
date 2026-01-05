@@ -399,6 +399,38 @@ echo "Уровень логирования в Telegram: DISABLED, INFO, WARNING
 echo ""
 
 echo "================================================"
+echo "🔐 OAUTH СЕКРЕТЫ (для Google Calendar/Tasks)"
+echo "================================================"
+echo ""
+echo "Для настройки OAuth следуйте инструкции в docs/oauth-setup.md"
+echo ""
+
+echo "1️⃣8️⃣  GOOGLE_OAUTH_CLIENT_ID (опционально)"
+echo "---"
+echo "Client ID из Google Cloud Console"
+echo "Формат: 123456789-xxxxxxxxxxxxx.apps.googleusercontent.com"
+echo ""
+
+echo "1️⃣9️⃣  GOOGLE_OAUTH_CLIENT_SECRET (опционально)"
+echo "---"
+echo "Client Secret из Google Cloud Console"
+echo "Формат: GOCSPX-xxxxxxxxxxxxxxxxxxxx"
+echo ""
+
+echo "2️⃣0️⃣  GOOGLE_OAUTH_REDIRECT_URI (опционально)"
+echo "---"
+echo "URL для callback после авторизации"
+echo "Примеры:"
+echo "  - http://your-server-ip:8080/oauth/callback"
+echo "  - https://yourdomain.com/oauth/callback"
+echo ""
+
+echo "2️⃣1️⃣  OAUTH_SERVER_PORT (опционально, по умолчанию: 8080)"
+echo "---"
+echo "Порт для OAuth callback сервера"
+echo ""
+
+echo "================================================"
 echo "✅ ГОТОВО!"
 echo "================================================"
 echo ""

@@ -116,13 +116,13 @@ async def registration(message: types.Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Настроить календарь", callback_data="setup_calendar"
+                    text="🔐 Авторизоваться через Google", callback_data="setup_calendar"
                 )
             ],
         ]
     )
     sent_msg = await message.answer(
-        MESSAGES["msg_start_not_configured"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+        MESSAGES["msg_start_not_configured"],
         reply_markup=keyboard,
     )
 
@@ -155,13 +155,13 @@ async def cmd_start(message: types.Message):
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="Настроить календарь", callback_data="setup_calendar"
+                        text="🔐 Авторизоваться через Google", callback_data="setup_calendar"
                     )
                 ],
             ]
         )
         sent_msg = await message.answer(
-            MESSAGES["msg_start_not_configured"] + "\n\n" + MESSAGES["msg_calendar_setup_welcome"],
+            MESSAGES["msg_start_not_configured"],
             reply_markup=keyboard,
         )
     else:

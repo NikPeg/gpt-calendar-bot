@@ -45,29 +45,6 @@ async def start_setup(callback: types.CallbackQuery, state: FSMContext):
         )
         return
 
-    instruction_text = MESSAGES["msg_oauth_setup_instruction"]
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🔐 Авторизоваться через Google",
-                    callback_data="oauth_authorize",
-                )
-            ],
-            [InlineKeyboardButton(text="Отмена", callback_data="setup_cancel")],
-        ]
-    )
-
-    await callback.message.edit_text(instruction_text, reply_markup=keyboard)
-    await state.set_state(SetupStates.waiting_for_setup_confirmation)
-
-
-@dp.callback_query(F.data == "oauth_authorize")
-async def oauth_authorize(callback: types.CallbackQuery, state: FSMContext):
-    """Генерирует OAuth URL и отправляет пользователю."""
-    await callback.answer()
-
     user_id = callback.from_user.id
 
     try:
@@ -102,7 +79,7 @@ async def oauth_authorize(callback: types.CallbackQuery, state: FSMContext):
         )
 
         await callback.message.edit_text(
-            MESSAGES["msg_oauth_authorization_link"], reply_markup=keyboard
+            MESSAGES["msg_calendar_setup_welcome"], reply_markup=keyboard
         )
 
         logger.info(f"USER{user_id}: OAuth authorization URL generated")
@@ -118,6 +95,13 @@ async def oauth_authorize(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=None,
         )
         await state.clear()
+
+
+@dp.callback_query(F.data == "oauth_authorize")
+async def oauth_authorize(callback: types.CallbackQuery, state: FSMContext):
+    """Генерирует OAuth URL и отправляет пользователю (оставлено для совместимости)."""
+    # Перенаправляем на start_setup для единообразия
+    await start_setup(callback, state)
 
 
 @dp.callback_query(F.data == "setup_cancel")
@@ -169,7 +153,7 @@ async def oauth_success_handler(callback: types.CallbackQuery):
 
     if conversation.oauth_access_token:
         await callback.message.edit_text(
-            MESSAGES["msg_oauth_success"], reply_markup=None
+            MESSAGES["msg_oauth_success"], reply_markup=None, parse_mode="HTML"
         )
         logger.info(f"USER{user_id}: OAuth setup completed successfully")
     else:

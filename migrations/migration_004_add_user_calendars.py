@@ -14,7 +14,7 @@ import aiosqlite
 from dotenv import load_dotenv
 
 load_dotenv()
-DATABASE_NAME = os.environ.get("DATABASE_NAME", "users.db")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "data/users.db")
 
 
 async def upgrade():
@@ -141,4 +141,3 @@ async def upgrade():
             f"Добавлено основных календарей: {migrated_primary_count}, "
             f"календарей праздников: {migrated_holidays_count}"
         )
-

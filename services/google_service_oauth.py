@@ -47,7 +47,7 @@ class GoogleServiceOAuth(GoogleServiceBase):
         self.client_id = client_id
         self.client_secret = client_secret
         self.credentials: Credentials | None = None
-        
+
         self.service = self._build_service()
 
     def _build_service(self) -> Resource | None:
@@ -65,7 +65,9 @@ class GoogleServiceOAuth(GoogleServiceBase):
             expiry = None
             if self.token_expiry:
                 try:
-                    expiry = datetime.fromisoformat(self.token_expiry.replace("Z", "+00:00"))
+                    expiry = datetime.fromisoformat(
+                        self.token_expiry.replace("Z", "+00:00")
+                    )
                 except Exception as e:
                     logger.warning(f"Could not parse token_expiry: {e}")
 
@@ -90,17 +92,23 @@ class GoogleServiceOAuth(GoogleServiceBase):
                     self.token_expiry = self.credentials.expiry.isoformat()
 
             # Создаем сервис
-            service = build(self.service_name, self.version, credentials=self.credentials)
-            logger.debug(f"Google {self.service_name.title()} OAuth service initialized successfully")
+            service = build(
+                self.service_name, self.version, credentials=self.credentials
+            )
+            logger.debug(
+                f"Google {self.service_name.title()} OAuth service initialized successfully"
+            )
             return service
         except Exception as e:
-            logger.error(f"Error initializing Google {self.service_name.title()} OAuth service: {e}")
+            logger.error(
+                f"Error initializing Google {self.service_name.title()} OAuth service: {e}"
+            )
             return None
 
     def get_updated_tokens(self) -> dict[str, str | None]:
         """
         Получает обновленные токены (если были обновлены).
-        
+
         Returns:
             dict с access_token, refresh_token, token_expiry
         """
@@ -195,6 +203,7 @@ class GoogleServiceOAuth(GoogleServiceBase):
         return {
             "access_token": credentials.token,
             "refresh_token": credentials.refresh_token,
-            "token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
+            "token_expiry": credentials.expiry.isoformat()
+            if credentials.expiry
+            else None,
         }
-

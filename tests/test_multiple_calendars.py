@@ -26,9 +26,7 @@ def setup_database():
     async def init_db():
         await check_db()
         # Создаем таблицу user_calendars
-        async with aiosqlite.connect(
-            os.environ.get("DATABASE_NAME", "users.db")
-        ) as db:
+        async with aiosqlite.connect(os.environ.get("DATABASE_NAME", "users.db")) as db:
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_calendars (
@@ -221,4 +219,3 @@ async def test_public_calendars_constants():
 if __name__ == "__main__":
     # Запуск тестов напрямую
     pytest.main([__file__, "-v"])
-

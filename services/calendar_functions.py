@@ -244,6 +244,7 @@ class CalendarContext:
 
         # Создаем сервис календаря через OAuth
         from core.config import GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+
         calendar_service = CalendarService(
             access_token=conversation.oauth_access_token,
             refresh_token=conversation.oauth_refresh_token,
@@ -324,35 +325,41 @@ class CalendarContext:
             # Primary календарь всегда доступен и его ID - это email пользователя
             if calendar_service.service:
                 try:
-                    calendar_list = calendar_service.service.calendarList().list().execute()
+                    calendar_list = (
+                        calendar_service.service.calendarList().list().execute()
+                    )
                     calendars = calendar_list.get("items", [])
-                    
+
                     # Ищем primary календарь
                     for cal in calendars:
                         if cal.get("primary", False):
                             user_email = cal.get("id")
-                            logger.info(f"USER{user_id}: Detected user email from primary calendar: {user_email}")
+                            logger.info(
+                                f"USER{user_id}: Detected user email from primary calendar: {user_email}"
+                            )
                             # Сохраняем email в БД если его там нет
                             if not conversation.user_email:
                                 conversation.user_email = user_email
                                 await conversation.update_in_db()
                             return user_email
-                    
+
                     # Если primary не найден, берем первый доступный
                     if calendars:
                         user_email = calendars[0].get("id")
-                        logger.info(f"USER{user_id}: Using first available calendar: {user_email}")
+                        logger.info(
+                            f"USER{user_id}: Using first available calendar: {user_email}"
+                        )
                         if not conversation.user_email:
                             conversation.user_email = user_email
                             await conversation.update_in_db()
                         return user_email
-                        
+
                 except Exception as e:
                     logger.error(f"USER{user_id}: Error getting calendar list: {e}")
-            
+
             logger.error(f"USER{user_id}: Could not determine user email")
             return None
-            
+
         except Exception as e:
             logger.error(f"Error getting user email: {e}")
             return None
@@ -438,9 +445,9 @@ class ListEventsCommand(CalendarCommand):
         result = f"📅 Найдено событий: {len(events)}\n\n"
         for i, event in enumerate(events, 1):
             summary = event.get("summary", "Без названия")
-            start = event.get("start", {}).get("dateTime") or event.get("start", {}).get(
-                "date", "Время не указано"
-            )
+            start = event.get("start", {}).get("dateTime") or event.get(
+                "start", {}
+            ).get("date", "Время не указано")
             event_id = event.get("id", "")
             source_calendar = event.get("_source_calendar_id", "")
 

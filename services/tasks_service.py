@@ -38,7 +38,7 @@ class TasksService(GoogleServiceBase):
             client_secret: OAuth Client Secret
         """
         super().__init__(service_name="tasks", version="v1", scopes=self.SCOPES)
-        
+
         # Создаем OAuth сервис
         self._oauth_service = GoogleServiceOAuth(
             service_name="tasks",
@@ -50,17 +50,17 @@ class TasksService(GoogleServiceBase):
             client_id=client_id,
             client_secret=client_secret,
         )
-        
+
         self.service = self._oauth_service.service
-    
+
     def _build_service(self):
         """OAuth service создается в __init__."""
         return self.service
-    
+
     def get_updated_tokens(self) -> dict[str, str | None]:
         """
         Получает обновленные OAuth токены.
-        
+
         Returns:
             dict с access_token, refresh_token, token_expiry
         """
@@ -99,16 +99,16 @@ class TasksService(GoogleServiceBase):
         try:
             # Получаем список всех списков задач
             tasklists = self.get_tasklists()
-            
+
             if not tasklists:
                 logger.warning("No task lists found")
                 return None
-            
+
             # Ищем список с title "My Tasks" или используем первый доступный
             for tasklist in tasklists:
                 if tasklist.get("title") == "My Tasks":
                     return tasklist["id"]
-            
+
             # Возвращаем первый доступный
             return tasklists[0]["id"]
         except Exception as e:
@@ -156,9 +156,7 @@ class TasksService(GoogleServiceBase):
 
             # Создаем задачу
             created_task = (
-                self.service.tasks()
-                .insert(tasklist=tasklist_id, body=task)
-                .execute()
+                self.service.tasks().insert(tasklist=tasklist_id, body=task).execute()
             )
 
             logger.info(f"Task created: {created_task.get('id')}")
@@ -207,7 +205,7 @@ class TasksService(GoogleServiceBase):
 
             if show_completed:
                 params["showCompleted"] = True
-            
+
             if show_hidden:
                 params["showHidden"] = True
 
@@ -245,9 +243,7 @@ class TasksService(GoogleServiceBase):
                     return None
 
             return (
-                self.service.tasks()
-                .get(tasklist=tasklist_id, task=task_id)
-                .execute()
+                self.service.tasks().get(tasklist=tasklist_id, task=task_id).execute()
             )
         except HttpError as e:
             logger.error(f"Error getting task: {e}")
@@ -320,9 +316,7 @@ class TasksService(GoogleServiceBase):
             logger.error(f"Unexpected error updating task: {e}")
             return None
 
-    def delete_task(
-        self, task_id: str, tasklist_id: str | None = None
-    ) -> bool:
+    def delete_task(self, task_id: str, tasklist_id: str | None = None) -> bool:
         """
         Удаляет задачу.
 
@@ -343,9 +337,7 @@ class TasksService(GoogleServiceBase):
                 if not tasklist_id:
                     return False
 
-            self.service.tasks().delete(
-                tasklist=tasklist_id, task=task_id
-            ).execute()
+            self.service.tasks().delete(tasklist=tasklist_id, task=task_id).execute()
 
             logger.info(f"Task deleted: {task_id}")
             return True
@@ -374,4 +366,3 @@ class TasksService(GoogleServiceBase):
             status="completed",
             tasklist_id=tasklist_id,
         )
-

@@ -224,8 +224,10 @@ class CreateTaskCommand(TasksCommand):
             task_id = task.get("id", "")
             task_title = task.get("title", "")
             due_str = task.get("due", "")
-            
-            result = f"✅ Задача создана успешно!\n\nНазвание: {task_title}\nID: {task_id}"
+
+            result = (
+                f"✅ Задача создана успешно!\n\nНазвание: {task_title}\nID: {task_id}"
+            )
             if due_str:
                 result += f"\nСрок: {due_str}"
             return result
@@ -255,19 +257,19 @@ class ListTasksCommand(TasksCommand):
             status = task.get("status", "")
             due = task.get("due", "")
             notes = task.get("notes", "")
-            
+
             # Иконка статуса
             status_icon = "✅" if status == "completed" else "⏳"
-            
+
             result += f"{i}. {status_icon} {title}\n   ID: {task_id}\n"
-            
+
             if due:
                 result += f"   Срок: {due}\n"
             if notes:
                 # Показываем только начало описания если оно длинное
                 notes_preview = notes[:50] + "..." if len(notes) > 50 else notes
                 result += f"   Описание: {notes_preview}\n"
-            
+
             result += "\n"
 
         return result.strip()
@@ -297,7 +299,7 @@ class GetTaskCommand(TasksCommand):
         due = task.get("due", "")
         status = task.get("status", "needsAction")
         updated = task.get("updated", "")
-        
+
         status_text = "✅ Выполнена" if status == "completed" else "⏳ В работе"
 
         result = f"📝 {title}\n\n"
@@ -437,4 +439,3 @@ async def execute_tasks_function(
             f"Error executing tasks function {function_name}: {e}", exc_info=True
         )
         return f"❌ Произошла ошибка при выполнении операции: {str(e)}"
-

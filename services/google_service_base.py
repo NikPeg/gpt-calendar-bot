@@ -28,7 +28,7 @@ class GoogleServiceBase(ABC):
     def _build_service(self) -> Resource | None:
         """
         Создает Google API сервис с конкретной реализацией авторизации.
-        
+
         Returns:
             Google API Resource или None при ошибке
         """
@@ -56,4 +56,3 @@ class GoogleServiceBase(ABC):
         if "T" in datetime_str:
             return datetime_str + "Z"
         return datetime_str
-

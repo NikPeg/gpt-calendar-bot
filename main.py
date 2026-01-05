@@ -74,7 +74,7 @@ async def main():
 
     # Создаем задачу для проверки подписок
     subscription_task = asyncio.create_task(subscription_check_loop(bot))
-    
+
     # Запускаем OAuth сервер в фоне
     oauth_task = asyncio.create_task(start_oauth_server())
 

@@ -67,4 +67,3 @@ async def rollback(conn: aiosqlite.Connection) -> str:
         Сообщение о результате отката
     """
     return "⚠️ Откат не требуется - поле user_email можно оставить в таблице"
-

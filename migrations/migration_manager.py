@@ -10,7 +10,7 @@ import aiosqlite
 from dotenv import load_dotenv
 
 load_dotenv()
-DATABASE_NAME = os.environ.get("DATABASE_NAME", "users.db")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "data/users.db")
 
 
 async def get_applied_migrations(db: aiosqlite.Connection) -> set[str]:

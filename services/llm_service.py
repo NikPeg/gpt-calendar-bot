@@ -99,14 +99,12 @@ async def get_llm_response(
         calendar_tasks_info = (
             "\n\n=== УПРАВЛЕНИЕ GOOGLE CALENDAR И TASKS ===\n\n"
             "Ты можешь управлять Google Calendar и Google Tasks пользователя.\n\n"
-            
             "📅 ФУНКЦИИ КАЛЕНДАРЯ:\n"
             "- create_calendar_event: создание событий в календаре\n"
             "- list_calendar_events: просмотр событий\n"
             "- get_calendar_event: получение информации о конкретном событии\n"
             "- update_calendar_event: изменение событий\n"
             "- delete_calendar_event: удаление событий\n\n"
-            
             "📝 ФУНКЦИИ ЗАДАЧ (GOOGLE TASKS):\n"
             "- create_task: создание задачи\n"
             "- list_tasks: просмотр списка задач\n"
@@ -114,13 +112,11 @@ async def get_llm_response(
             "- update_task: изменение задачи (название, описание, срок, статус)\n"
             "- complete_task: пометить задачу как выполненную\n"
             "- delete_task: удаление задачи\n\n"
-            
             "🔑 РАЗЛИЧИЯ МЕЖДУ СОБЫТИЯМИ И ЗАДАЧАМИ:\n"
             "• События (Calendar Events): имеют точное время начала и окончания, подходят для встреч, напоминаний с фиксированным временем\n"
             "• Задачи (Tasks): имеют только дедлайн (срок выполнения), подходят для TODO-списков, задач без точного времени\n"
             "• Задачи можно помечать как выполненные (complete_task), события нужно удалять\n"
             "• Задачи имеют статусы: 'needsAction' (активная) и 'completed' (выполнена)\n\n"
-            
             "⚠️ КРИТИЧЕСКИ ВАЖНО:\n"
             "1. Для удаления/изменения события ВСЕГДА сначала используй list_calendar_events для получения его ID\n"
             "2. Для удаления/изменения задачи ВСЕГДА сначала используй list_tasks для получения её ID\n"
@@ -128,7 +124,6 @@ async def get_llm_response(
             "4. Ты можешь делать несколько вызовов подряд: сначала list_tasks, затем complete_task\n"
             "5. Если пользователь просит 'добавить задачу' - используй create_task, если 'создать событие' - create_calendar_event\n"
             "6. Если неясно что нужно (событие или задача), спроси у пользователя или используй задачу по умолчанию\n\n"
-            
             "Используй эти функции для управления календарем и задачами пользователя."
         )
         system_content += calendar_tasks_info
@@ -249,7 +244,16 @@ async def _process_llm_response(
             )
 
             # Выполняем функцию (calendar или tasks)
-            if function_name.startswith(("create_task", "list_task", "get_task", "update_task", "delete_task", "complete_task")):
+            if function_name.startswith(
+                (
+                    "create_task",
+                    "list_task",
+                    "get_task",
+                    "update_task",
+                    "delete_task",
+                    "complete_task",
+                )
+            ):
                 result = await execute_tasks_function(
                     function_name, function_args, chat_id
                 )
@@ -582,14 +586,12 @@ async def process_user_video(
             calendar_tasks_info = (
                 "\n\n=== УПРАВЛЕНИЕ GOOGLE CALENDAR И TASKS ===\n\n"
                 "Ты можешь управлять Google Calendar и Google Tasks пользователя.\n\n"
-                
                 "📅 ФУНКЦИИ КАЛЕНДАРЯ:\n"
                 "- create_calendar_event: создание событий в календаре\n"
                 "- list_calendar_events: просмотр событий\n"
                 "- get_calendar_event: получение информации о конкретном событии\n"
                 "- update_calendar_event: изменение событий\n"
                 "- delete_calendar_event: удаление событий\n\n"
-                
                 "📝 ФУНКЦИИ ЗАДАЧ (GOOGLE TASKS):\n"
                 "- create_task: создание задачи\n"
                 "- list_tasks: просмотр списка задач\n"
@@ -597,13 +599,11 @@ async def process_user_video(
                 "- update_task: изменение задачи (название, описание, срок, статус)\n"
                 "- complete_task: пометить задачу как выполненную\n"
                 "- delete_task: удаление задачи\n\n"
-                
                 "🔑 РАЗЛИЧИЯ МЕЖДУ СОБЫТИЯМИ И ЗАДАЧАМИ:\n"
                 "• События (Calendar Events): имеют точное время начала и окончания, подходят для встреч, напоминаний с фиксированным временем\n"
                 "• Задачи (Tasks): имеют только дедлайн (срок выполнения), подходят для TODO-списков, задач без точного времени\n"
                 "• Задачи можно помечать как выполненные (complete_task), события нужно удалять\n"
                 "• Задачи имеют статусы: 'needsAction' (активная) и 'completed' (выполнена)\n\n"
-                
                 "Используй эти функции для управления календарем и задачами пользователя."
             )
             system_content += calendar_tasks_info

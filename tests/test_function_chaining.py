@@ -81,9 +81,7 @@ async def test_function_chaining_delete_event():
     }
 
     # Результат delete_calendar_event
-    delete_event_result = (
-        "✅ Событие удалено успешно!\n\nID: lunch_event_id_12345"
-    )
+    delete_event_result = "✅ Событие удалено успешно!\n\nID: lunch_event_id_12345"
 
     # Третий ответ от LLM - финальное сообщение пользователю
     final_response = {
@@ -93,16 +91,12 @@ async def test_function_chaining_delete_event():
     }
 
     # Мокаем execute_calendar_function
-    with patch(
-        "services.llm_service.execute_calendar_function"
-    ) as mock_execute:
+    with patch("services.llm_service.execute_calendar_function") as mock_execute:
         # Настраиваем возвращаемые значения для разных вызовов
         mock_execute.side_effect = [list_events_result, delete_event_result]
 
         # Мокаем send_request_to_openrouter для возврата второго и третьего ответов
-        with patch(
-            "services.llm_service.send_request_to_openrouter"
-        ) as mock_send:
+        with patch("services.llm_service.send_request_to_openrouter") as mock_send:
             mock_send.side_effect = [second_response, final_response]
 
             # Вызываем функцию обработки
@@ -158,14 +152,10 @@ async def test_function_chaining_max_iterations():
         ],
     }
 
-    with patch(
-        "services.llm_service.execute_calendar_function"
-    ) as mock_execute:
+    with patch("services.llm_service.execute_calendar_function") as mock_execute:
         mock_execute.return_value = "Test result"
 
-        with patch(
-            "services.llm_service.send_request_to_openrouter"
-        ) as mock_send:
+        with patch("services.llm_service.send_request_to_openrouter") as mock_send:
             # Всегда возвращаем ответ с tool_calls, чтобы создать бесконечный цикл
             mock_send.return_value = response_with_tool_calls
 
@@ -219,14 +209,10 @@ async def test_function_chaining_no_tool_calls():
         "tool_calls": None,
     }
 
-    with patch(
-        "services.llm_service.execute_calendar_function"
-    ) as mock_execute:
+    with patch("services.llm_service.execute_calendar_function") as mock_execute:
         mock_execute.return_value = "Test result"
 
-        with patch(
-            "services.llm_service.send_request_to_openrouter"
-        ) as mock_send:
+        with patch("services.llm_service.send_request_to_openrouter") as mock_send:
             mock_send.return_value = second_response
 
             result = await _process_llm_response(
@@ -302,14 +288,10 @@ async def test_function_chaining_triple_call():
         "tool_calls": None,
     }
 
-    with patch(
-        "services.llm_service.execute_calendar_function"
-    ) as mock_execute:
+    with patch("services.llm_service.execute_calendar_function") as mock_execute:
         mock_execute.side_effect = ["Result 1", "Result 2", "Result 3"]
 
-        with patch(
-            "services.llm_service.send_request_to_openrouter"
-        ) as mock_send:
+        with patch("services.llm_service.send_request_to_openrouter") as mock_send:
             mock_send.side_effect = [response2, response3, response4]
 
             result = await _process_llm_response(
@@ -323,4 +305,3 @@ async def test_function_chaining_triple_call():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

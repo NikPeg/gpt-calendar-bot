@@ -36,7 +36,7 @@ async def oauth_callback(request: web.Request) -> web.Response:
     """Обработчик OAuth callback от Google."""
     logger.info(f"OAuth callback received: {request.url}")
     print(f"🔵 OAuth callback received: {request.url}")
-    
+
     code = request.query.get("code")
     state = request.query.get("state")
     error = request.query.get("error")
@@ -84,15 +84,15 @@ async def oauth_callback(request: web.Request) -> web.Response:
         # Сохраняем токены в БД
         conversation = Conversation(user_id)
         await conversation.get_from_db()
-        
+
         conversation.oauth_access_token = tokens["access_token"]
         conversation.oauth_refresh_token = tokens["refresh_token"]
         conversation.oauth_token_expiry = tokens["token_expiry"]
-        
+
         await conversation.update_in_db()
 
         logger.info(f"OAuth successful for user {user_id}")
-        
+
         # Отправляем уведомление в Telegram в фоновой задаче
         async def send_notification():
             try:
@@ -103,11 +103,11 @@ async def oauth_callback(request: web.Request) -> web.Response:
                     "• Создавать события в вашем календаре\n"
                     "• Создавать задачи в Google Tasks\n"
                     "• Показывать ваши события и задачи\n\n"
-                    "Попробуйте спросить: 'Покажи мои события на неделю' или 'Создай задачу купить молоко'"
+                    "Попробуйте спросить: 'Покажи мои события на неделю' или 'Создай задачу купить молоко'",
                 )
             except Exception as e:
                 logger.error(f"Failed to send notification to user {user_id}: {e}")
-        
+
         # Запускаем в фоне, не дожидаясь завершения
         asyncio.create_task(send_notification())
 
@@ -195,7 +195,7 @@ async def start_oauth_server():
         )
         print("⚠️  OAuth server NOT started: credentials not configured")
         return
-    
+
     if not GOOGLE_REDIRECT_URI:
         logger.warning(
             "GOOGLE_OAUTH_REDIRECT_URI not configured. "
@@ -207,16 +207,16 @@ async def start_oauth_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    
+
     site = web.TCPSite(runner, "0.0.0.0", OAUTH_SERVER_PORT)
     await site.start()
-    
+
     logger.info(f"OAuth server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
     logger.info(f"Callback URL: {GOOGLE_REDIRECT_URI}")
     # Логируем в консоль для Docker logs
     print(f"✅ OAuth server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
     print(f"📋 Callback URL: {GOOGLE_REDIRECT_URI}")
-    
+
     # Держим сервер запущенным
     try:
         await asyncio.Event().wait()
@@ -237,4 +237,3 @@ if __name__ == "__main__":
             logger.info("OAuth server stopped")
 
     asyncio.run(main())
-

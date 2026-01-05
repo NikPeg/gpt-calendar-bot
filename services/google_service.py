@@ -15,7 +15,13 @@ from services.google_service_base import GoogleServiceBase
 class GoogleService(GoogleServiceBase):
     """Базовый класс для работы с Google API через сервисный аккаунт (deprecated)."""
 
-    def __init__(self, service_account_json: str | None, service_name: str, version: str, scopes: list[str]):
+    def __init__(
+        self,
+        service_account_json: str | None,
+        service_name: str,
+        version: str,
+        scopes: list[str],
+    ):
         """
         Инициализирует Google API сервис.
 
@@ -46,12 +52,15 @@ class GoogleService(GoogleServiceBase):
 
             # Создаем сервис
             service = build(self.service_name, self.version, credentials=credentials)
-            logger.debug(f"Google {self.service_name.title()} service initialized successfully")
+            logger.debug(
+                f"Google {self.service_name.title()} service initialized successfully"
+            )
             return service
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in service_account_json: {e}")
             return None
         except Exception as e:
-            logger.error(f"Error initializing Google {self.service_name.title()} service: {e}")
+            logger.error(
+                f"Error initializing Google {self.service_name.title()} service: {e}"
+            )
             return None
-

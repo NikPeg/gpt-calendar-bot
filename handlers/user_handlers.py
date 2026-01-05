@@ -116,7 +116,8 @@ async def registration(message: types.Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔐 Авторизоваться через Google", callback_data="setup_calendar"
+                    text="🔐 Авторизоваться через Google",
+                    callback_data="setup_calendar",
                 )
             ],
         ]
@@ -155,7 +156,8 @@ async def cmd_start(message: types.Message):
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="🔐 Авторизоваться через Google", callback_data="setup_calendar"
+                        text="🔐 Авторизоваться через Google",
+                        callback_data="setup_calendar",
                     )
                 ],
             ]

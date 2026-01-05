@@ -40,7 +40,7 @@ class CalendarService(GoogleServiceBase):
             client_secret: OAuth Client Secret
         """
         super().__init__(service_name="calendar", version="v3", scopes=self.SCOPES)
-        
+
         # Создаем OAuth сервис
         self._oauth_service = GoogleServiceOAuth(
             service_name="calendar",
@@ -52,17 +52,17 @@ class CalendarService(GoogleServiceBase):
             client_id=client_id,
             client_secret=client_secret,
         )
-        
+
         self.service = self._oauth_service.service
-    
+
     def _build_service(self):
         """OAuth service создается в __init__."""
         return self.service
-    
+
     def get_updated_tokens(self) -> dict[str, str | None]:
         """
         Получает обновленные OAuth токены.
-        
+
         Returns:
             dict с access_token, refresh_token, token_expiry
         """

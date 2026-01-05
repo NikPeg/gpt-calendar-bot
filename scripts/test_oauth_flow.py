@@ -27,10 +27,14 @@ def test_create_authorization_url():
 
     client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    redirect_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://127.0.0.1:8080/oauth/callback")
+    redirect_uri = os.environ.get(
+        "GOOGLE_OAUTH_REDIRECT_URI", "http://127.0.0.1:8080/oauth/callback"
+    )
 
     if not client_id or not client_secret:
-        print("❌ Ошибка: GOOGLE_OAUTH_CLIENT_ID или GOOGLE_OAUTH_CLIENT_SECRET не установлены")
+        print(
+            "❌ Ошибка: GOOGLE_OAUTH_CLIENT_ID или GOOGLE_OAUTH_CLIENT_SECRET не установлены"
+        )
         print("   Добавьте их в файл .env")
         return False
 
@@ -54,17 +58,19 @@ def test_create_authorization_url():
         print("✅ Authorization URL создан успешно!")
         print(f"\n📋 URL:\n{auth_url}\n")
         print(f"🔐 State: {state}\n")
-        
+
         # Проверяем, что URL содержит необходимые параметры
         assert "client_id=" in auth_url, "URL должен содержать client_id"
         assert "redirect_uri=" in auth_url, "URL должен содержать redirect_uri"
         assert "scope=" in auth_url, "URL должен содержать scope"
         assert "state=" in auth_url, "URL должен содержать state"
-        assert "access_type=offline" in auth_url, "URL должен содержать access_type=offline"
+        assert "access_type=offline" in auth_url, (
+            "URL должен содержать access_type=offline"
+        )
         assert "prompt=consent" in auth_url, "URL должен содержать prompt=consent"
-        
+
         print("✅ Все обязательные параметры присутствуют")
-        
+
         return True
     except Exception as e:
         print(f"❌ Ошибка при создании URL: {e}")
@@ -116,7 +122,7 @@ def test_oauth_service_init():
 
     # Сервис должен быть None из-за невалидных токенов, но это ожидаемо
     print("✅ Сервис обработал тестовые токены (ожидаемый fail при валидации)")
-    
+
     return True
 
 
@@ -135,7 +141,7 @@ def test_calendar_service():
         return True
 
     print("📝 Создаем CalendarService...")
-    
+
     try:
         service = CalendarService(
             access_token=None,  # Без токенов
@@ -153,18 +159,19 @@ def test_calendar_service():
         # Проверяем метод get_updated_tokens
         print("\n📝 Проверяем метод get_updated_tokens...")
         tokens = service.get_updated_tokens()
-        
+
         assert tokens is not None, "get_updated_tokens должен возвращать dict"
         assert "access_token" in tokens, "Должен быть ключ access_token"
         assert "refresh_token" in tokens, "Должен быть ключ refresh_token"
         assert "token_expiry" in tokens, "Должен быть ключ token_expiry"
-        
+
         print("✅ Метод get_updated_tokens работает корректно")
-        
+
         return True
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -184,7 +191,7 @@ def test_tasks_service():
         return True
 
     print("📝 Создаем TasksService...")
-    
+
     try:
         service = TasksService(
             access_token=None,
@@ -261,4 +268,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

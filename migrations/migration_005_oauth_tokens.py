@@ -96,16 +96,6 @@ async def migrate(conn: aiosqlite.Connection) -> str:
                 """)
                 messages.append("✅ Добавлено поле oauth_token_expiry")
 
-        # Также удаляем таблицу user_calendars если она существует
-        async with conn.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name='user_calendars'
-        """) as cursor:
-            result = await cursor.fetchone()
-            if result:
-                await conn.execute("DROP TABLE user_calendars")
-                messages.append("✅ Удалена таблица user_calendars (больше не нужна)")
-
         await conn.commit()
 
         if not messages:
@@ -129,4 +119,3 @@ async def rollback(conn: aiosqlite.Connection) -> str:
         Сообщение о результате отката
     """
     return "⚠️ Откат этой миграции невозможен - данные service_account были удалены"
-

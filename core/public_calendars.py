@@ -65,4 +65,3 @@ def list_public_calendars() -> list[tuple[str, PublicCalendar]]:
         Список кортежей (ключ, PublicCalendar)
     """
     return list(PUBLIC_CALENDARS.items())
-

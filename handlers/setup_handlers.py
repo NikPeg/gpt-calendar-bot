@@ -69,11 +69,7 @@ async def start_setup(callback: types.CallbackQuery, state: FSMContext):
         # Создаем кнопку с ссылкой на авторизацию
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔐 Перейти к авторизации", url=auth_url
-                    )
-                ],
+                [InlineKeyboardButton(text="🔐 Перейти к авторизации", url=auth_url)],
                 [InlineKeyboardButton(text="Отмена", callback_data="setup_cancel")],
             ]
         )

@@ -18,7 +18,7 @@ load_dotenv()
 # OAuth конфигурация
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
 
 # Scope для Calendar и Tasks
 SCOPES = [
@@ -34,11 +34,11 @@ async def connect_google(message: types.Message):
     """Команда для подключения Google Calendar и Tasks."""
     user_id = message.from_user.id
     
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET or not GOOGLE_REDIRECT_URI:
         await message.answer(
             "⚠️ OAuth не настроен.\n\n"
-            "Администратор должен настроить GOOGLE_OAUTH_CLIENT_ID и "
-            "GOOGLE_OAUTH_CLIENT_SECRET в конфигурации бота."
+            "Администратор должен настроить GOOGLE_OAUTH_CLIENT_ID, "
+            "GOOGLE_OAUTH_CLIENT_SECRET и GOOGLE_OAUTH_REDIRECT_URI в конфигурации бота."
         )
         return
     

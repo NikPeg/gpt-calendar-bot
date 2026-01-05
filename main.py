@@ -13,6 +13,7 @@ from core.bot_instance import bot, dp
 from core.config import ADMIN_CHAT, add_telegram_handler, logger
 from core.middlewares import SubscriptionMiddleware
 from migrations.migration_manager import run_migrations
+from oauth_server import start_oauth_server
 from services.subscription_service import subscription_check_loop
 
 # Импортируем все обработчики (чтобы они зарегистрировались)
@@ -73,6 +74,9 @@ async def main():
 
     # Создаем задачу для проверки подписок
     subscription_task = asyncio.create_task(subscription_check_loop(bot))
+    
+    # Запускаем OAuth сервер в фоне
+    oauth_task = asyncio.create_task(start_oauth_server())
 
     try:
         # Запускаем polling - он сам обрабатывает сигналы
@@ -84,8 +88,10 @@ async def main():
     finally:
         print("Останавливаем бота...")
         subscription_task.cancel()
+        oauth_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await subscription_task
+            await oauth_task
         await bot.session.close()
         print("✅ Бот остановлен")
 

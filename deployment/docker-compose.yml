@@ -13,6 +13,9 @@ services:
       - ../logs:/app/logs
     environment:
       - DATABASE_NAME=/data/users.db
+    ports:
+      # Пробрасываем порт для OAuth callback сервера
+      - "8080:8080"
     # Если нужен healthcheck
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'python.*main.py' || exit 1"]

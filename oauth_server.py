@@ -19,7 +19,7 @@ load_dotenv()
 # OAuth конфигурация
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
 OAUTH_SERVER_PORT = int(os.environ.get("OAUTH_SERVER_PORT", "8080"))
 
 # Scope для Calendar и Tasks
@@ -34,6 +34,9 @@ pending_states = {}
 
 async def oauth_callback(request: web.Request) -> web.Response:
     """Обработчик OAuth callback от Google."""
+    logger.info(f"OAuth callback received: {request.url}")
+    print(f"🔵 OAuth callback received: {request.url}")
+    
     code = request.query.get("code")
     state = request.query.get("state")
     error = request.query.get("error")
@@ -42,14 +45,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
         logger.error(f"OAuth error: {error}")
         return web.Response(
             text="❌ Ошибка авторизации. Вы можете закрыть это окно и вернуться в Telegram.",
-            content_type="text/html; charset=utf-8",
+            content_type="text/html",
+            charset="utf-8",
             status=400,
         )
 
     if not code or not state:
         return web.Response(
             text="❌ Неверные параметры. Вы можете закрыть это окно.",
-            content_type="text/html; charset=utf-8",
+            content_type="text/html",
+            charset="utf-8",
             status=400,
         )
 
@@ -59,13 +64,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
         logger.warning(f"Invalid or expired state: {state}")
         return web.Response(
             text="❌ Неверный или истекший state token. Попробуйте снова.",
-            content_type="text/html; charset=utf-8",
+            content_type="text/html",
+            charset="utf-8",
             status=400,
         )
 
     try:
         # Обмениваем code на токены
-        tokens = GoogleServiceOAuth.exchange_code_for_tokens(
+        # Используем to_thread для синхронного HTTP запроса
+        tokens = await asyncio.to_thread(
+            GoogleServiceOAuth.exchange_code_for_tokens,
             code=code,
             client_id=GOOGLE_CLIENT_ID,
             client_secret=GOOGLE_CLIENT_SECRET,
@@ -83,21 +91,25 @@ async def oauth_callback(request: web.Request) -> web.Response:
         
         await conversation.update_in_db()
 
-        # Отправляем уведомление в Telegram
-        try:
-            await bot.send_message(
-                user_id,
-                "✅ Google Calendar и Tasks успешно подключены!\n\n"
-                "Теперь я могу:\n"
-                "• Создавать события в вашем календаре\n"
-                "• Создавать задачи в Google Tasks\n"
-                "• Показывать ваши события и задачи\n\n"
-                "Попробуйте спросить: 'Покажи мои события на неделю' или 'Создай задачу купить молоко'"
-            )
-        except Exception as e:
-            logger.error(f"Failed to send notification to user {user_id}: {e}")
-
         logger.info(f"OAuth successful for user {user_id}")
+        
+        # Отправляем уведомление в Telegram в фоновой задаче
+        async def send_notification():
+            try:
+                await bot.send_message(
+                    user_id,
+                    "✅ Google Calendar и Tasks успешно подключены!\n\n"
+                    "Теперь я могу:\n"
+                    "• Создавать события в вашем календаре\n"
+                    "• Создавать задачи в Google Tasks\n"
+                    "• Показывать ваши события и задачи\n\n"
+                    "Попробуйте спросить: 'Покажи мои события на неделю' или 'Создай задачу купить молоко'"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send notification to user {user_id}: {e}")
+        
+        # Запускаем в фоне, не дожидаясь завершения
+        asyncio.create_task(send_notification())
 
         return web.Response(
             text="""
@@ -138,14 +150,16 @@ async def oauth_callback(request: web.Request) -> web.Response:
             </body>
             </html>
             """,
-            content_type="text/html; charset=utf-8",
+            content_type="text/html",
+            charset="utf-8",
         )
 
     except Exception as e:
-        logger.error(f"Error processing OAuth callback: {e}")
+        logger.error(f"Error processing OAuth callback: {e}", exc_info=True)
         return web.Response(
             text=f"❌ Ошибка при обработке авторизации: {str(e)}",
-            content_type="text/html; charset=utf-8",
+            content_type="text/html",
+            charset="utf-8",
             status=500,
         )
 
@@ -155,11 +169,20 @@ async def health_check(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "service": "oauth-server"})
 
 
+async def test_endpoint(request: web.Request) -> web.Response:
+    """Тестовый endpoint для проверки работы сервера."""
+    logger.info("Test endpoint called")
+    print("🔵 Test endpoint called")
+    return web.Response(text="OAuth server is working!", content_type="text/plain")
+
+
 def create_app() -> web.Application:
     """Создает aiohttp приложение."""
     app = web.Application()
     app.router.add_get("/oauth/callback", oauth_callback)
     app.router.add_get("/health", health_check)
+    app.router.add_get("/test", test_endpoint)
+    app.router.add_get("/", test_endpoint)  # Для корня тоже
     return app
 
 
@@ -170,6 +193,15 @@ async def start_oauth_server():
             "OAuth credentials not configured. "
             "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env"
         )
+        print("⚠️  OAuth server NOT started: credentials not configured")
+        return
+    
+    if not GOOGLE_REDIRECT_URI:
+        logger.warning(
+            "GOOGLE_OAUTH_REDIRECT_URI not configured. "
+            "Set GOOGLE_OAUTH_REDIRECT_URI in .env (e.g., http://127.0.0.1:8080/oauth/callback or https://yourdomain.com/oauth/callback)"
+        )
+        print("⚠️  OAuth server NOT started: GOOGLE_OAUTH_REDIRECT_URI not configured")
         return
 
     app = create_app()
@@ -181,6 +213,17 @@ async def start_oauth_server():
     
     logger.info(f"OAuth server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
     logger.info(f"Callback URL: {GOOGLE_REDIRECT_URI}")
+    # Логируем в консоль для Docker logs
+    print(f"✅ OAuth server started on http://0.0.0.0:{OAUTH_SERVER_PORT}")
+    print(f"📋 Callback URL: {GOOGLE_REDIRECT_URI}")
+    
+    # Держим сервер запущенным
+    try:
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        logger.info("OAuth server stopping...")
+        await runner.cleanup()
+        raise
 
 
 if __name__ == "__main__":

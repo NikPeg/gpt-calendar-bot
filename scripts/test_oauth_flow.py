@@ -27,7 +27,7 @@ def test_create_authorization_url():
 
     client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    redirect_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8080/oauth/callback")
+    redirect_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://127.0.0.1:8080/oauth/callback")
 
     if not client_id or not client_secret:
         print("❌ Ошибка: GOOGLE_OAUTH_CLIENT_ID или GOOGLE_OAUTH_CLIENT_SECRET не установлены")

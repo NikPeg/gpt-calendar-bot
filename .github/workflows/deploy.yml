@@ -217,6 +217,21 @@ jobs:
                 sleep 2
               fi
               
+              # Проверяем и освобождаем порт 8080
+              echo "🔍 Проверяем порт 8080..."
+              PORT_PIDS=$(sudo lsof -ti:8080 2>/dev/null || true)
+              if [ -n "$PORT_PIDS" ]; then
+                echo "⚠️  Порт 8080 занят процессами: $PORT_PIDS"
+                for PID in $PORT_PIDS; do
+                  echo "  Убиваем процесс на порту 8080: $PID"
+                  sudo kill -9 "$PID" 2>/dev/null || true
+                done
+                sleep 2
+                echo "✅ Порт 8080 освобожден"
+              else
+                echo "✅ Порт 8080 свободен"
+              fi
+              
               # Создаем .env файл со всеми переменными окружения
               echo "📝 Создаем .env файл..."
               {

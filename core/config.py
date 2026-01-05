@@ -43,7 +43,7 @@ DEFAULT_PROMPT = os.environ.get("DEFAULT_PROMPT", "")
 TIMEZONE_OFFSET = int(os.environ.get("TIMEZONE_OFFSET", "3"))
 
 # База данных
-DATABASE_NAME = os.environ.get("DATABASE_NAME", "users.db")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "data/users.db")
 MAX_CONTEXT = int(os.environ.get("MAX_CONTEXT") or "10")
 MAX_STORAGE = int(os.environ.get("MAX_STORAGE", "100"))  # Количество сообщений в БД
 
@@ -54,6 +54,15 @@ SUBSCRIPTION_CHECK_INTERVAL = int(
 
 # Ссылка на форму обратной связи (опционально)
 FEEDBACK_FORM_URL = os.environ.get("FEEDBACK_FORM_URL", "")
+
+# OAuth 2.0 конфигурация
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+GOOGLE_OAUTH_REDIRECT_URI = os.environ.get(
+    "GOOGLE_OAUTH_REDIRECT_URI",
+    "http://localhost:8080/oauth/callback"
+)
+OAUTH_SERVER_PORT = int(os.environ.get("OAUTH_SERVER_PORT", "8080"))
 
 
 # Загрузка сообщений

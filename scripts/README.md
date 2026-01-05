@@ -110,8 +110,7 @@ python scripts/debug_calendar.py scripts/service-account.json user@gmail.com
 ✅ Found 10 events in the current query
 ✅ Found 32 events in January 2026
 📅 Events in January:
-   1. Проверь ИИС - 2026-01-05T08:00:00+03:00
-   2. Побрей бороду и - 2026-01-05T08:00:00+03:00
+   1. Сходи в гости - 2026-01-05T08:00:00+03:00
    ...
 ```
 
@@ -134,6 +133,66 @@ python scripts/debug_calendar.py scripts/service-account.json user@gmail.com
 - Для Gmail аккаунтов domain-wide delegation не работает (только для Google Workspace)
 - Решение для Gmail: расшарить календарь с service account email
 - Calendar ID для Gmail календарей обычно равен email адресу пользователя
+
+---
+
+### `test_tasks.py`
+
+🔍 **Тестирование интеграции с Google Tasks API**
+
+Скрипт для проверки работы с Google Tasks API через сервисный аккаунт. Выполняет полный цикл операций с задачами.
+
+**Использование:**
+
+```bash
+# Запуск из корня проекта
+python scripts/test_tasks.py
+```
+
+**Требования:**
+
+- Файл `scripts/creds.json` с данными сервисного аккаунта
+- Включенный Google Tasks API в Google Cloud Console
+
+**Что делает:**
+
+1. ✅ Загружает credentials из `scripts/creds.json`
+2. 🔧 Инициализирует Tasks Service
+3. 📋 Получает список всех списков задач
+4. ➕ Создает тестовую задачу со сроком на завтра
+5. 📖 Получает список активных задач
+6. ✏️ Обновляет созданную задачу
+7. ✅ Помечает задачу как выполненную
+8. 🗑️ Удаляет задачу
+
+**Вывод:**
+
+```
+🔧 Тестирование Google Tasks API
+
+✅ Данные сервисного аккаунта загружены из creds.json
+✅ Tasks Service инициализирован успешно
+
+📋 Тест 1: Получение списков задач
+✅ Найдено списков задач: 1
+   - My Tasks (ID: ...)
+
+📝 Тест 2: Создание тестовой задачи
+   Название: 🤖 Тестовая задача из бота
+   Срок: 2026-01-06 12:00 UTC
+✅ Задача создана успешно!
+...
+```
+
+**Если Tasks API не включен:**
+
+Скрипт выведет подробную инструкцию с прямой ссылкой на страницу включения API в Google Cloud Console.
+
+**Примечания:**
+
+- Service Account имеет свои собственные задачи, отдельные от пользовательских
+- Для доступа к задачам пользователей потребуется OAuth 2.0 flow
+- См. подробную документацию: [docs/google-tasks-integration.md](../docs/google-tasks-integration.md)
 
 ---
 

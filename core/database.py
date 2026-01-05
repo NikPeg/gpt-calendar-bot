@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 LLM_TOKEN = os.environ.get("LLM_TOKEN")
 ADMIN_CHAT = int(os.environ.get("ADMIN_CHAT") or "0")
-DATABASE_NAME = os.environ.get("DATABASE_NAME", "users.db")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "data/users.db")
 MAX_CONTEXT = int(os.environ.get("MAX_CONTEXT") or "10")
 MAX_STORAGE = int(os.environ.get("MAX_STORAGE", "100"))
 
@@ -37,26 +37,28 @@ class Conversation:
         active_messages_count=None,
         subscription_verified=None,
         referral_code=None,
-        service_account_json=None,
-        user_email=None,
         timezone_offset=None,
+        oauth_access_token=None,
+        oauth_refresh_token=None,
+        oauth_token_expiry=None,
     ):
         self.id = id
         self.name = name
         self.active_messages_count = active_messages_count
         self.subscription_verified = subscription_verified
         self.referral_code = referral_code
-        self.service_account_json = service_account_json
-        self.user_email = user_email
         self.timezone_offset = timezone_offset
+        self.oauth_access_token = oauth_access_token
+        self.oauth_refresh_token = oauth_refresh_token
+        self.oauth_token_expiry = oauth_token_expiry
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, service_account_json={'***' if self.service_account_json else None}, user_email={self.user_email}, timezone_offset={self.timezone_offset})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, timezone_offset={self.timezone_offset}, oauth_tokens={'***' if self.oauth_access_token else None})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -65,14 +67,15 @@ class Conversation:
                 self.active_messages_count = row[2]
                 self.subscription_verified = row[3]
                 self.referral_code = row[4]
-                self.service_account_json = row[5] if len(row) > 5 else None
-                self.user_email = row[6] if len(row) > 6 else None
-                self.timezone_offset = row[7] if len(row) > 7 else None
+                self.timezone_offset = row[5] if len(row) > 5 else None
+                self.oauth_access_token = row[6] if len(row) > 6 else None
+                self.oauth_refresh_token = row[7] if len(row) > 7 else None
+                self.oauth_token_expiry = row[8] if len(row) > 8 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -82,9 +85,10 @@ class Conversation:
                     active_messages_count=row[2],
                     subscription_verified=row[3],
                     referral_code=row[4],
-                    service_account_json=row[5] if len(row) > 5 else None,
-                    user_email=row[6] if len(row) > 6 else None,
-                    timezone_offset=row[7] if len(row) > 7 else None,
+                    timezone_offset=row[5] if len(row) > 5 else None,
+                    oauth_access_token=row[6] if len(row) > 6 else None,
+                    oauth_refresh_token=row[7] if len(row) > 7 else None,
+                    oauth_token_expiry=row[8] if len(row) > 8 else None,
                 )
             return None
 
@@ -100,8 +104,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, service_account_json, user_email, timezone_offset)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, oauth_access_token, oauth_refresh_token, oauth_token_expiry)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -109,9 +113,10 @@ class Conversation:
                 self.active_messages_count,
                 self.subscription_verified,
                 self.referral_code,
-                self.service_account_json,
-                self.user_email,
                 self.timezone_offset,
+                self.oauth_access_token,
+                self.oauth_refresh_token,
+                self.oauth_token_expiry,
             )
             await cursor.execute(sql_insert, values)
             await db.commit()

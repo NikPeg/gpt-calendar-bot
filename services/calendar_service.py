@@ -2,80 +2,70 @@
 Сервис для работы с Google Calendar API.
 """
 
-import json
 from datetime import UTC, datetime
 from typing import Any
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from core.config import logger
+from services.google_service_base import GoogleServiceBase
+from services.google_service_oauth import GoogleServiceOAuth
 
 
-class CalendarService:
-    """Сервис для работы с Google Calendar через сервисный аккаунт."""
+class CalendarService(GoogleServiceBase):
+    """Сервис для работы с Google Calendar через OAuth 2.0."""
 
-    def __init__(self, service_account_json: str | None):
+    # Scope для Calendar API
+    SCOPES = [
+        "https://www.googleapis.com/auth/calendar",
+    ]
+
+    def __init__(
+        self,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        token_expiry: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ):
         """
-        Инициализирует сервис календаря.
+        Инициализирует сервис календаря через OAuth 2.0.
 
         Args:
-            service_account_json: JSON строка с данными сервисного аккаунта
+            access_token: OAuth access token
+            refresh_token: OAuth refresh token
+            token_expiry: Время истечения токена
+            client_id: OAuth Client ID
+            client_secret: OAuth Client Secret
         """
-        self.service_account_json = service_account_json
-        self.service = None
-        self._initialize_service()
-
-    def _initialize_service(self):
-        """Инициализирует Google Calendar API сервис."""
-        if not self.service_account_json:
-            self.service = None
-            return
-
-        try:
-            # Парсим JSON
-            credentials_info = json.loads(self.service_account_json)
-
-            # Создаем credentials из сервисного аккаунта
-            credentials = service_account.Credentials.from_service_account_info(
-                credentials_info,
-                scopes=["https://www.googleapis.com/auth/calendar"],
-            )
-
-            # Создаем сервис
-            self.service = build("calendar", "v3", credentials=credentials)
-            logger.debug("Google Calendar service initialized successfully")
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in service_account_json: {e}")
-            self.service = None
-        except Exception as e:
-            logger.error(f"Error initializing Google Calendar service: {e}")
-            self.service = None
-
-    def is_configured(self) -> bool:
-        """Проверяет, настроен ли сервисный аккаунт."""
-        return self.service is not None
-
-    @staticmethod
-    def _ensure_rfc3339_format(datetime_str: str) -> str:
+        super().__init__(service_name="calendar", version="v3", scopes=self.SCOPES)
+        
+        # Создаем OAuth сервис
+        self._oauth_service = GoogleServiceOAuth(
+            service_name="calendar",
+            version="v3",
+            scopes=self.SCOPES,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_expiry=token_expiry,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        
+        self.service = self._oauth_service.service
+    
+    def _build_service(self):
+        """OAuth service создается в __init__."""
+        return self.service
+    
+    def get_updated_tokens(self) -> dict[str, str | None]:
         """
-        Убеждается, что дата в формате RFC3339 с timezone для Google Calendar API.
-
-        Args:
-            datetime_str: Строка с датой в формате ISO 8601
-
+        Получает обновленные OAuth токены.
+        
         Returns:
-            Строка в формате RFC3339
+            dict с access_token, refresh_token, token_expiry
         """
-        # Если уже есть Z или timezone, возвращаем как есть
-        if "Z" in datetime_str or "+" in datetime_str or datetime_str.count("-") > 2:
-            # Заменяем +00:00 на Z для UTC
-            return datetime_str.replace("+00:00", "Z")
-        # Если нет timezone, добавляем Z (предполагаем UTC)
-        if "T" in datetime_str:
-            return datetime_str + "Z"
-        return datetime_str
+        return self._oauth_service.get_updated_tokens()
 
     def get_calendar_id(self, user_email: str) -> str | None:
         """

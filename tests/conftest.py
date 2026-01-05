@@ -22,4 +22,3 @@ os.environ.setdefault("OAUTH_REDIRECT_URI", "http://localhost:8080/oauth/callbac
 # Убеждаемся что директория для логов существует
 log_dir = Path(os.environ["LOG_DIR"])
 log_dir.mkdir(parents=True, exist_ok=True)
-

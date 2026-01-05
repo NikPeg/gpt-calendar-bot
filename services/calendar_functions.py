@@ -400,10 +400,10 @@ class CreateEventCommand(CalendarCommand):
     async def execute(self) -> str:
         summary = self.arguments.get("summary", "")
         if not summary:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указано название события"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указано название события"},
+                ensure_ascii=False,
+            )
 
         description = self.arguments.get("description")
         start_datetime = self._parse_datetime(self.arguments.get("start_datetime"))
@@ -424,10 +424,13 @@ class CreateEventCommand(CalendarCommand):
                 recurrence_info = f" (повторяется {recurrence_rule})"
             else:
                 # Правило не распознано
-                return json.dumps({
-                    "status": "error",
-                    "message": f"❌ Не удалось создать событие: правило повторения '{recurrence_rule}' не поддерживается. Поддерживаются только: weekly, biweekly, weekdays, monthly"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"❌ Не удалось создать событие: правило повторения '{recurrence_rule}' не поддерживается. Поддерживаются только: weekly, biweekly, weekdays, monthly",
+                    },
+                    ensure_ascii=False,
+                )
 
         # Создаем событие в основном календаре
         event = self.context.calendar_service.create_event(
@@ -443,18 +446,24 @@ class CreateEventCommand(CalendarCommand):
         if event:
             event_id = event.get("id", "")
             start = event.get("start", {}).get("dateTime", "")
-            
+
             # Возвращаем структурированный успешный результат
-            return json.dumps({
-                "status": "success",
-                "event_id": event_id,
-                "message": f"✅ Событие \"{summary}\" создано успешно{recurrence_info}!\n\nID: {event_id}\nВремя: {start}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": "❌ Не удалось создать событие в Google Calendar"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "event_id": event_id,
+                    "message": f'✅ Событие "{summary}" создано успешно{recurrence_info}!\n\nID: {event_id}\nВремя: {start}',
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "❌ Не удалось создать событие в Google Calendar",
+            },
+            ensure_ascii=False,
+        )
 
     @staticmethod
     def _parse_recurrence_rule(recurrence_rule: str) -> list[str] | None:
@@ -581,10 +590,10 @@ class UpdateEventCommand(CalendarCommand):
     async def execute(self) -> str:
         event_id = self.arguments.get("event_id")
         if not event_id:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указан ID события"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указан ID события"},
+                ensure_ascii=False,
+            )
 
         summary = self.arguments.get("summary")
         description = self.arguments.get("description")
@@ -604,16 +613,22 @@ class UpdateEventCommand(CalendarCommand):
         )
 
         if event:
-            return json.dumps({
-                "status": "success",
-                "event_id": event_id,
-                "message": f"✅ Событие обновлено успешно!\n\nID: {event_id}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Не удалось обновить событие с ID {event_id} в Google Calendar"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "event_id": event_id,
+                    "message": f"✅ Событие обновлено успешно!\n\nID: {event_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"❌ Не удалось обновить событие с ID {event_id} в Google Calendar",
+            },
+            ensure_ascii=False,
+        )
 
 
 class DeleteEventCommand(CalendarCommand):
@@ -622,10 +637,10 @@ class DeleteEventCommand(CalendarCommand):
     async def execute(self) -> str:
         event_id = self.arguments.get("event_id")
         if not event_id:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указан ID события"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указан ID события"},
+                ensure_ascii=False,
+            )
 
         # Удаляем событие из основного календаря
         success = self.context.calendar_service.delete_event(
@@ -633,16 +648,22 @@ class DeleteEventCommand(CalendarCommand):
         )
 
         if success:
-            return json.dumps({
-                "status": "success",
-                "event_id": event_id,
-                "message": f"✅ Событие удалено успешно!\n\nID: {event_id}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Не удалось удалить событие с ID {event_id} из Google Calendar"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "event_id": event_id,
+                    "message": f"✅ Событие удалено успешно!\n\nID: {event_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"❌ Не удалось удалить событие с ID {event_id} из Google Calendar",
+            },
+            ensure_ascii=False,
+        )
 
 
 class CalendarCommandFactory:

@@ -226,20 +226,22 @@ class CreateTaskCommand(TasksCommand):
             task_title = task.get("title", "")
             due_str = task.get("due", "")
 
-            message = f"✅ Задача \"{task_title}\" создана успешно!\n\nID: {task_id}"
+            message = f'✅ Задача "{task_title}" создана успешно!\n\nID: {task_id}'
             if due_str:
                 message += f"\nСрок: {due_str}"
-            
-            return json.dumps({
-                "status": "success",
-                "task_id": task_id,
-                "message": message
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": "❌ Не удалось создать задачу в Google Tasks"
-        }, ensure_ascii=False)
+
+            return json.dumps(
+                {"status": "success", "task_id": task_id, "message": message},
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "❌ Не удалось создать задачу в Google Tasks",
+            },
+            ensure_ascii=False,
+        )
 
 
 class ListTasksCommand(TasksCommand):
@@ -329,10 +331,10 @@ class UpdateTaskCommand(TasksCommand):
     async def execute(self) -> str:
         task_id = self.arguments.get("task_id")
         if not task_id:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указан ID задачи"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указан ID задачи"},
+                ensure_ascii=False,
+            )
 
         title = self.arguments.get("title")
         notes = self.arguments.get("notes")
@@ -349,16 +351,22 @@ class UpdateTaskCommand(TasksCommand):
         )
 
         if task:
-            return json.dumps({
-                "status": "success",
-                "task_id": task_id,
-                "message": f"✅ Задача обновлена успешно!\n\nID: {task_id}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Не удалось обновить задачу с ID {task_id} в Google Tasks"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "task_id": task_id,
+                    "message": f"✅ Задача обновлена успешно!\n\nID: {task_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"❌ Не удалось обновить задачу с ID {task_id} в Google Tasks",
+            },
+            ensure_ascii=False,
+        )
 
 
 class DeleteTaskCommand(TasksCommand):
@@ -367,25 +375,31 @@ class DeleteTaskCommand(TasksCommand):
     async def execute(self) -> str:
         task_id = self.arguments.get("task_id")
         if not task_id:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указан ID задачи"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указан ID задачи"},
+                ensure_ascii=False,
+            )
 
         # Удаляем задачу
         success = self.context.tasks_service.delete_task(task_id)
 
         if success:
-            return json.dumps({
-                "status": "success",
-                "task_id": task_id,
-                "message": f"✅ Задача удалена успешно!\n\nID: {task_id}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Не удалось удалить задачу с ID {task_id} из Google Tasks"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "task_id": task_id,
+                    "message": f"✅ Задача удалена успешно!\n\nID: {task_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"❌ Не удалось удалить задачу с ID {task_id} из Google Tasks",
+            },
+            ensure_ascii=False,
+        )
 
 
 class CompleteTaskCommand(TasksCommand):
@@ -394,25 +408,31 @@ class CompleteTaskCommand(TasksCommand):
     async def execute(self) -> str:
         task_id = self.arguments.get("task_id")
         if not task_id:
-            return json.dumps({
-                "status": "error",
-                "message": "❌ Не указан ID задачи"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "error", "message": "❌ Не указан ID задачи"},
+                ensure_ascii=False,
+            )
 
         # Помечаем задачу как выполненную
         task = self.context.tasks_service.complete_task(task_id)
 
         if task:
-            return json.dumps({
-                "status": "success",
-                "task_id": task_id,
-                "message": f"✅ Задача отмечена как выполненная!\n\nID: {task_id}"
-            }, ensure_ascii=False)
-        
-        return json.dumps({
-            "status": "error",
-            "message": f"❌ Не удалось завершить задачу с ID {task_id} в Google Tasks"
-        }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "success",
+                    "task_id": task_id,
+                    "message": f"✅ Задача отмечена как выполненная!\n\nID: {task_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"❌ Не удалось завершить задачу с ID {task_id} в Google Tasks",
+            },
+            ensure_ascii=False,
+        )
 
 
 class TasksCommandFactory:

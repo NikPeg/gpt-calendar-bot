@@ -341,7 +341,9 @@ class TasksService(GoogleServiceBase):
             logger.error(f"GOOGLE_API: ❌ HTTP Error updating task {task_id}: {e}")
             return None
         except Exception as e:
-            logger.error(f"GOOGLE_API: ❌ Unexpected error updating task {task_id}: {e}")
+            logger.error(
+                f"GOOGLE_API: ❌ Unexpected error updating task {task_id}: {e}"
+            )
             return None
 
     def delete_task(self, task_id: str, tasklist_id: str | None = None) -> bool:
@@ -380,7 +382,9 @@ class TasksService(GoogleServiceBase):
             logger.error(f"GOOGLE_API: ❌ HTTP Error deleting task {task_id}: {e}")
             return False
         except Exception as e:
-            logger.error(f"GOOGLE_API: ❌ Unexpected error deleting task {task_id}: {e}")
+            logger.error(
+                f"GOOGLE_API: ❌ Unexpected error deleting task {task_id}: {e}"
+            )
             return False
 
     def complete_task(

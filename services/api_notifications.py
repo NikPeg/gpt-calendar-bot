@@ -93,7 +93,9 @@ def format_event_details(event_data: dict[str, Any] | None) -> str:
     if event_id:
         parts.append(f"ID: {event_id[:15]}...")  # Обрезаем длинный ID
 
-    start = event_data.get("start", {}).get("dateTime") or event_data.get("start", {}).get("date")
+    start = event_data.get("start", {}).get("dateTime") or event_data.get(
+        "start", {}
+    ).get("date")
     if start:
         parts.append(f"Время: {start[:16]}")  # YYYY-MM-DDTHH:MM
 
@@ -129,4 +131,3 @@ def format_task_details(task_data: dict[str, Any] | None) -> str:
         parts.append(f"Статус: {status_text}")
 
     return "\n".join(parts) if parts else ""
-

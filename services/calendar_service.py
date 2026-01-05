@@ -524,7 +524,9 @@ class CalendarService(GoogleServiceBase):
             logger.error(f"GOOGLE_API: ❌ HTTP Error updating event {event_id}: {e}")
             return None
         except Exception as e:
-            logger.error(f"GOOGLE_API: ❌ Unexpected error updating event {event_id}: {e}")
+            logger.error(
+                f"GOOGLE_API: ❌ Unexpected error updating event {event_id}: {e}"
+            )
             return None
 
     def delete_event(self, user_email: str, event_id: str) -> bool:
@@ -563,5 +565,7 @@ class CalendarService(GoogleServiceBase):
             logger.error(f"GOOGLE_API: ❌ HTTP Error deleting event {event_id}: {e}")
             return False
         except Exception as e:
-            logger.error(f"GOOGLE_API: ❌ Unexpected error deleting event {event_id}: {e}")
+            logger.error(
+                f"GOOGLE_API: ❌ Unexpected error deleting event {event_id}: {e}"
+            )
             return False

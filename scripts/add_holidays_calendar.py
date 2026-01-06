@@ -10,7 +10,20 @@ import os
 import sys
 
 # Добавляем корневую директорию в путь для импорта
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+# Загружаем переменные окружения из .env файла в корне проекта
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(project_root, ".env"))
+
+# Устанавливаем правильный путь к базе данных
+# Если DATABASE_NAME относительный, делаем его абсолютным относительно корня проекта
+database_name = os.environ.get("DATABASE_NAME", "data/users.db")
+if not os.path.isabs(database_name):
+    database_name = os.path.join(project_root, database_name)
+    os.environ["DATABASE_NAME"] = database_name
 
 from core.database import Conversation, UserCalendar
 from core.public_calendars import RUSSIAN_HOLIDAYS
@@ -70,8 +83,9 @@ async def add_holidays_calendar_to_all() -> dict[str, int]:
         conversation = Conversation(user_id)
         await conversation.get_from_db()
 
-        if not conversation.service_account_json:
-            print(f"⊘ USER{user_id}: Календарь не настроен, пропускаем")
+        # Проверяем наличие OAuth токенов (новый формат авторизации)
+        if not conversation.oauth_access_token:
+            print(f"⊘ USER{user_id}: Календарь не настроен (нет OAuth токенов), пропускаем")
             stats["skipped"] += 1
             continue
 

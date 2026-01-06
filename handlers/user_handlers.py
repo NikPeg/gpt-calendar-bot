@@ -232,26 +232,22 @@ async def check_access_permissions(user_id: int) -> dict[str, bool]:
         # Проверяем доступ к календарю "Праздники России"
         try:
             if calendar_service.is_configured():
-                # Проверяем, добавлен ли календарь пользователю
-                enabled_calendar_ids = await UserCalendar.get_enabled_calendar_ids(user_id)
-                if RUSSIAN_HOLIDAYS.calendar_id in enabled_calendar_ids:
-                    # Пробуем получить события из календаря праздников
-                    events = calendar_service.list_events_from_calendar(
-                        calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
-                        max_results=1,
-                    )
-                    # Проверяем, что не было ошибки недостаточных прав
-                    if events is not None and not (
-                        isinstance(events, list)
-                        and len(events) > 0
-                        and isinstance(events[0], dict)
-                        and events[0].get("_error") == "insufficient_permissions"
-                    ):
-                        result["holidays_calendar"] = True
+                # Пробуем получить события из календаря праздников напрямую
+                # (публичные календари доступны без добавления в БД)
+                events = calendar_service.list_events_from_calendar(
+                    calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
+                    max_results=1,
+                )
+                # Проверяем, что не было ошибки недостаточных прав
+                if events is not None and not (
+                    isinstance(events, list)
+                    and len(events) > 0
+                    and isinstance(events[0], dict)
+                    and events[0].get("_error") == "insufficient_permissions"
+                ):
+                    result["holidays_calendar"] = True
         except Exception as e:
-            logger.warning(
-                f"USER{user_id}: Holidays calendar access check failed: {e}"
-            )
+            logger.warning(f"USER{user_id}: Holidays calendar access check failed: {e}")
 
     except Exception as e:
         logger.error(f"USER{user_id}: Error checking access permissions: {e}")

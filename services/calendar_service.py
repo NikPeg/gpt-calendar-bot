@@ -34,7 +34,7 @@ class CalendarService(GoogleServiceBase):
         """
         if e.resp.status != 403:
             return False
-        
+
         error_details = e.error_details if hasattr(e, "error_details") else []
         for detail in error_details:
             if detail.get("reason") == "insufficientPermissions":
@@ -403,8 +403,10 @@ class CalendarService(GoogleServiceBase):
                     f"Insufficient permissions (403). User needs to re-authorize with Calendar scope."
                 )
                 # Возвращаем специальный маркер ошибки
-                return [{"_error": "insufficient_permissions", "_calendar_id": calendar_id}]
-            
+                return [
+                    {"_error": "insufficient_permissions", "_calendar_id": calendar_id}
+                ]
+
             logger.error(f"Error listing events from calendar {calendar_id}: {e}")
             return []
         except Exception as e:
@@ -446,7 +448,7 @@ class CalendarService(GoogleServiceBase):
                 time_min=time_min,
                 time_max=time_max,
             )
-            
+
             # Проверяем наличие ошибки недостаточных прав
             if (
                 events
@@ -458,7 +460,7 @@ class CalendarService(GoogleServiceBase):
                 has_permission_error = True
                 # Убираем маркер ошибки из списка
                 continue
-            
+
             all_events.extend(events)
 
         # Сортируем все события по времени начала
@@ -469,11 +471,11 @@ class CalendarService(GoogleServiceBase):
 
         # Ограничиваем количество
         result = all_events[:max_results]
-        
+
         # Добавляем маркер ошибки, если была ошибка прав доступа
         if has_permission_error:
             result.append({"_error": "insufficient_permissions"})
-        
+
         return result
 
     def get_event(self, user_email: str, event_id: str) -> dict[str, Any] | None:

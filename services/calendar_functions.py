@@ -457,7 +457,7 @@ class CreateEventCommand(CalendarCommand):
                     },
                     ensure_ascii=False,
                 )
-            
+
             event_id = event.get("id", "")
             start = event.get("start", {}).get("dateTime", "")
 
@@ -536,7 +536,10 @@ class ListEventsCommand(CalendarCommand):
         if events:
             # Ищем маркер ошибки в конце списка
             for event in events:
-                if isinstance(event, dict) and event.get("_error") == "insufficient_permissions":
+                if (
+                    isinstance(event, dict)
+                    and event.get("_error") == "insufficient_permissions"
+                ):
                     has_permission_error = True
                     events.remove(event)
                     break
@@ -668,7 +671,7 @@ class UpdateEventCommand(CalendarCommand):
                     },
                     ensure_ascii=False,
                 )
-            
+
             return json.dumps(
                 {
                     "status": "success",

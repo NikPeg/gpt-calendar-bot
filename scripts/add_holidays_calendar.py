@@ -14,7 +14,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 # Загружаем переменные окружения из .env файла в корне проекта
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(os.path.join(project_root, ".env"))
 
@@ -25,8 +25,8 @@ if not os.path.isabs(database_name):
     database_name = os.path.join(project_root, database_name)
     os.environ["DATABASE_NAME"] = database_name
 
-from core.database import Conversation, UserCalendar
-from core.public_calendars import RUSSIAN_HOLIDAYS
+from core.database import Conversation, UserCalendar  # noqa: E402
+from core.public_calendars import RUSSIAN_HOLIDAYS  # noqa: E402
 
 
 async def add_holidays_calendar_to_user(user_id: int) -> bool:
@@ -85,7 +85,9 @@ async def add_holidays_calendar_to_all() -> dict[str, int]:
 
         # Проверяем наличие OAuth токенов (новый формат авторизации)
         if not conversation.oauth_access_token:
-            print(f"⊘ USER{user_id}: Календарь не настроен (нет OAuth токенов), пропускаем")
+            print(
+                f"⊘ USER{user_id}: Календарь не настроен (нет OAuth токенов), пропускаем"
+            )
             stats["skipped"] += 1
             continue
 

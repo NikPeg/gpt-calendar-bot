@@ -448,11 +448,16 @@ class CalendarService(GoogleServiceBase):
             )
             
             # Проверяем наличие ошибки недостаточных прав
-            if events and isinstance(events, list) and len(events) > 0:
-                if isinstance(events[0], dict) and events[0].get("_error") == "insufficient_permissions":
-                    has_permission_error = True
-                    # Убираем маркер ошибки из списка
-                    continue
+            if (
+                events
+                and isinstance(events, list)
+                and len(events) > 0
+                and isinstance(events[0], dict)
+                and events[0].get("_error") == "insufficient_permissions"
+            ):
+                has_permission_error = True
+                # Убираем маркер ошибки из списка
+                continue
             
             all_events.extend(events)
 

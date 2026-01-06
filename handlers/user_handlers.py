@@ -195,7 +195,7 @@ async def check_access_permissions(user_id: int) -> dict[str, bool]:
             )
             if tasks_service.is_configured():
                 # Пробуем получить список задач
-                tasklists = tasks_service.get_tasklists()
+                tasks_service.get_tasklists()
                 result["tasks"] = True
         except Exception as e:
             logger.warning(f"USER{user_id}: Tasks access check failed: {e}")

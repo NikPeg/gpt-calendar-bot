@@ -292,6 +292,26 @@ class CalendarContext:
             primary_calendar.is_readonly = False
             await primary_calendar.update_in_db()
 
+        # Убеждаемся, что календарь праздников России добавлен
+        from core.public_calendars import RUSSIAN_HOLIDAYS
+
+        holidays_calendars = await UserCalendar.get_user_calendars(
+            user_id, enabled_only=False
+        )
+        has_holidays = any(
+            cal.calendar_id == RUSSIAN_HOLIDAYS.calendar_id
+            for cal in holidays_calendars
+        )
+        if not has_holidays:
+            logger.info(
+                f"USER{user_id}: Автоматически добавляем календарь '{RUSSIAN_HOLIDAYS.name}'"
+            )
+            await UserCalendar.add_public_calendar(
+                user_id=user_id,
+                calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
+                calendar_name=RUSSIAN_HOLIDAYS.name,
+            )
+
         # Получаем все включенные календари
         all_calendar_ids = await UserCalendar.get_enabled_calendar_ids(user_id)
 

@@ -91,6 +91,33 @@ async def oauth_callback(request: web.Request) -> web.Response:
 
         await conversation.update_in_db()
 
+        # Автоматически добавляем календарь праздников России
+        from core.database import UserCalendar
+        from core.public_calendars import RUSSIAN_HOLIDAYS
+
+        try:
+            # Проверяем, есть ли уже такой календарь
+            calendars = await UserCalendar.get_user_calendars(
+                user_id, enabled_only=False
+            )
+            has_holidays = any(
+                cal.calendar_id == RUSSIAN_HOLIDAYS.calendar_id for cal in calendars
+            )
+            if not has_holidays:
+                await UserCalendar.add_public_calendar(
+                    user_id=user_id,
+                    calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
+                    calendar_name=RUSSIAN_HOLIDAYS.name,
+                )
+                logger.info(
+                    f"USER{user_id}: Автоматически добавлен календарь '{RUSSIAN_HOLIDAYS.name}'"
+                )
+        except Exception as e:
+            # Не критично, если не удалось добавить календарь праздников
+            logger.warning(
+                f"USER{user_id}: Не удалось автоматически добавить календарь праздников: {e}"
+            )
+
         logger.info(f"OAuth successful for user {user_id}")
 
         # Отправляем уведомление в Telegram в фоновой задаче

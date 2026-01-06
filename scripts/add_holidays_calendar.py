@@ -29,6 +29,37 @@ from core.database import Conversation, UserCalendar  # noqa: E402
 from core.public_calendars import RUSSIAN_HOLIDAYS  # noqa: E402
 
 
+def check_database_permissions() -> tuple[bool, str]:
+    """
+    Проверяет права доступа к базе данных.
+
+    Returns:
+        Кортеж (успешно, сообщение об ошибке)
+    """
+    db_path = os.environ.get("DATABASE_NAME", "data/users.db")
+    db_dir = os.path.dirname(db_path)
+
+    # Проверяем существование директории
+    if not os.path.exists(db_dir):
+        return False, f"Директория {db_dir} не существует"
+
+    # Проверяем права на запись в директорию
+    if not os.access(db_dir, os.W_OK):
+        return (
+            False,
+            f"Нет прав на запись в директорию {db_dir}. Выполните: chmod 755 {db_dir}",
+        )
+
+    # Проверяем существование файла базы данных и права на запись
+    if os.path.exists(db_path) and not os.access(db_path, os.W_OK):
+        return (
+            False,
+            f"Нет прав на запись в файл {db_path}. Выполните: chmod 644 {db_path}",
+        )
+
+    return True, ""
+
+
 async def add_holidays_calendar_to_user(user_id: int) -> bool:
     """
     Добавляет календарь праздников России конкретному пользователю.
@@ -60,7 +91,17 @@ async def add_holidays_calendar_to_user(user_id: int) -> bool:
         return True
 
     except Exception as e:
-        print(f"✗ USER{user_id}: Ошибка при добавлении календаря: {e}")
+        error_msg = str(e)
+        if "readonly" in error_msg.lower() or "read-only" in error_msg.lower():
+            print(
+                f"✗ USER{user_id}: Ошибка доступа к базе данных (readonly).\n"
+                f"  Проверьте права доступа к файлу базы данных.\n"
+                f"  Выполните на сервере:\n"
+                f"    chmod 644 {os.environ.get('DATABASE_NAME', 'data/users.db')}\n"
+                f"    chmod 755 {os.path.dirname(os.environ.get('DATABASE_NAME', 'data/users.db'))}"
+            )
+        else:
+            print(f"✗ USER{user_id}: Ошибка при добавлении календаря: {e}")
         return False
 
 
@@ -107,6 +148,12 @@ async def main():
     print("Утилита добавления календаря праздников России")
     print("=" * 60)
     print()
+
+    # Проверяем права доступа к базе данных
+    can_write, error_msg = check_database_permissions()
+    if not can_write:
+        print(f"❌ Ошибка: {error_msg}")
+        sys.exit(1)
 
     # Проверяем аргументы командной строки
     if len(sys.argv) > 1:

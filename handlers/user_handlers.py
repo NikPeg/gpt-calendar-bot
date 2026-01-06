@@ -150,6 +150,115 @@ async def registration(message: types.Message):
         await forward_to_debug(message.chat.id, sent_msg.message_id)
 
 
+async def check_access_permissions(user_id: int) -> dict[str, bool]:
+    """
+    Проверяет доступ ко всем необходимым ресурсам.
+
+    Args:
+        user_id: ID пользователя
+
+    Returns:
+        Словарь с результатами проверки:
+        {
+            "tasks": True/False,
+            "personal_calendar": True/False,
+            "holidays_calendar": True/False
+        }
+    """
+    from core.config import GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+    from core.database import UserCalendar
+    from core.public_calendars import RUSSIAN_HOLIDAYS
+    from services.calendar_service import CalendarService
+    from services.tasks_service import TasksService
+
+    result = {
+        "tasks": False,
+        "personal_calendar": False,
+        "holidays_calendar": False,
+    }
+
+    conversation = Conversation(user_id)
+    await conversation.get_from_db()
+
+    if not conversation.oauth_access_token:
+        return result
+
+    try:
+        # Проверяем доступ к Tasks
+        try:
+            tasks_service = TasksService(
+                access_token=conversation.oauth_access_token,
+                refresh_token=conversation.oauth_refresh_token,
+                token_expiry=conversation.oauth_token_expiry,
+                client_id=GOOGLE_OAUTH_CLIENT_ID,
+                client_secret=GOOGLE_OAUTH_CLIENT_SECRET,
+            )
+            if tasks_service.is_configured():
+                # Пробуем получить список задач
+                tasklists = tasks_service.get_tasklists()
+                result["tasks"] = True
+        except Exception as e:
+            logger.warning(f"USER{user_id}: Tasks access check failed: {e}")
+
+        # Проверяем доступ к личному календарю
+        try:
+            calendar_service = CalendarService(
+                access_token=conversation.oauth_access_token,
+                refresh_token=conversation.oauth_refresh_token,
+                token_expiry=conversation.oauth_token_expiry,
+                client_id=GOOGLE_OAUTH_CLIENT_ID,
+                client_secret=GOOGLE_OAUTH_CLIENT_SECRET,
+            )
+            if calendar_service.is_configured():
+                # Получаем основной календарь пользователя
+                primary_calendar = await UserCalendar.get_primary_calendar(user_id)
+                if primary_calendar:
+                    # Пробуем получить события из календаря
+                    events = calendar_service.list_events_from_calendar(
+                        calendar_id=primary_calendar.calendar_id,
+                        max_results=1,
+                    )
+                    # Проверяем, что не было ошибки недостаточных прав
+                    if events and not (
+                        isinstance(events, list)
+                        and len(events) > 0
+                        and isinstance(events[0], dict)
+                        and events[0].get("_error") == "insufficient_permissions"
+                    ):
+                        result["personal_calendar"] = True
+        except Exception as e:
+            logger.warning(f"USER{user_id}: Personal calendar access check failed: {e}")
+
+        # Проверяем доступ к календарю "Праздники России"
+        try:
+            if calendar_service.is_configured():
+                # Проверяем, добавлен ли календарь пользователю
+                enabled_calendar_ids = await UserCalendar.get_enabled_calendar_ids(user_id)
+                if RUSSIAN_HOLIDAYS.calendar_id in enabled_calendar_ids:
+                    # Пробуем получить события из календаря праздников
+                    events = calendar_service.list_events_from_calendar(
+                        calendar_id=RUSSIAN_HOLIDAYS.calendar_id,
+                        max_results=1,
+                    )
+                    # Проверяем, что не было ошибки недостаточных прав
+                    if events is not None and not (
+                        isinstance(events, list)
+                        and len(events) > 0
+                        and isinstance(events[0], dict)
+                        and events[0].get("_error") == "insufficient_permissions"
+                    ):
+                        result["holidays_calendar"] = True
+        except Exception as e:
+            logger.warning(
+                f"USER{user_id}: Holidays calendar access check failed: {e}"
+            )
+
+    except Exception as e:
+        logger.error(f"USER{user_id}: Error checking access permissions: {e}")
+
+    return result
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     """Команда /start - приветствие и настройка календаря."""
@@ -177,12 +286,45 @@ async def cmd_start(message: types.Message):
             reply_markup=keyboard,
         )
     else:
-        # Календарь уже настроен - показываем приветствие для настроенного пользователя
-        sent_msg = await message.answer(
-            MESSAGES["msg_start_configured"],
-            reply_markup=ReplyKeyboardRemove(),
-            parse_mode="HTML",
-        )
+        # Календарь настроен - проверяем доступ ко всем ресурсам
+        access_check = await check_access_permissions(user_id)
+
+        missing_access = []
+        if not access_check["tasks"]:
+            missing_access.append("Google Tasks")
+        if not access_check["personal_calendar"]:
+            missing_access.append("личный календарь")
+        if not access_check["holidays_calendar"]:
+            missing_access.append("календарь 'Праздники России'")
+
+        if missing_access:
+            # Есть проблемы с доступом - сообщаем пользователю
+            missing_text = ", ".join(missing_access)
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔐 Переавторизоваться",
+                            callback_data="setup_calendar",
+                        )
+                    ],
+                ]
+            )
+            sent_msg = await message.answer(
+                f"⚠️ Обнаружены проблемы с доступом к некоторым ресурсам:\n\n"
+                f"❌ Нет доступа к: {missing_text}\n\n"
+                f"Для полноценной работы бота необходимо переавторизоваться "
+                f"и выдать доступ ко всем запрашиваемым ресурсам.\n\n"
+                f"Нажмите кнопку ниже для переавторизации.",
+                reply_markup=keyboard,
+            )
+        else:
+            # Все в порядке - показываем приветствие для настроенного пользователя
+            sent_msg = await message.answer(
+                MESSAGES["msg_start_configured"],
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode="HTML",
+            )
 
     # Проверяем статус подписки, если есть обязательные каналы
     if (

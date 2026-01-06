@@ -5,9 +5,15 @@
 
 import json
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from core.config import GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, logger
+from core.config import (
+    GOOGLE_OAUTH_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    TIMEZONE_OFFSET,
+    logger,
+)
 from core.database import Conversation
 from services.tasks_service import TasksService
 
@@ -143,6 +149,7 @@ class TasksContext:
         self,
         user_id: int,
         tasks_service: TasksService,
+        timezone_offset: int,
     ):
         """
         Инициализирует контекст задач.
@@ -150,9 +157,11 @@ class TasksContext:
         Args:
             user_id: ID пользователя
             tasks_service: Сервис для работы с Google Tasks
+            timezone_offset: Смещение часового пояса пользователя от UTC
         """
         self.user_id = user_id
         self.tasks_service = tasks_service
+        self.timezone_offset = timezone_offset
 
     @classmethod
     async def create(cls, user_id: int) -> "TasksContext | None":
@@ -195,7 +204,14 @@ class TasksContext:
             await conversation.update_in_db()
             logger.debug(f"USER{user_id}: OAuth tokens updated in database")
 
-        return cls(user_id, tasks_service)
+        # Определяем часовой пояс
+        timezone_offset = (
+            conversation.timezone_offset
+            if conversation.timezone_offset is not None
+            else TIMEZONE_OFFSET
+        )
+
+        return cls(user_id, tasks_service, timezone_offset)
 
 
 class TasksCommand(ABC):
@@ -261,6 +277,18 @@ class ListTasksCommand(TasksCommand):
         due_min = self.arguments.get("due_min")
         due_max = self.arguments.get("due_max")
 
+        # Конвертируем даты из локального времени пользователя в UTC
+        # если они указаны без timezone
+        user_tz = timezone(timedelta(hours=self.context.timezone_offset))
+
+        if due_min:
+            # Если дата без timezone, считаем её в часовом поясе пользователя
+            due_min = self._convert_to_utc_if_needed(due_min, user_tz)
+
+        if due_max:
+            # Если дата без timezone, считаем её в часовом поясе пользователя
+            due_max = self._convert_to_utc_if_needed(due_max, user_tz)
+
         # Получаем задачи
         tasks = self.context.tasks_service.list_tasks(
             max_results=max_results,
@@ -295,6 +323,44 @@ class ListTasksCommand(TasksCommand):
             result += "\n"
 
         return result.strip()
+
+    @staticmethod
+    def _convert_to_utc_if_needed(dt_str: str, user_tz: timezone) -> str:
+        """
+        Конвертирует дату в UTC, если она указана без timezone.
+
+        Args:
+            dt_str: Дата в формате ISO 8601
+            user_tz: Часовой пояс пользователя
+
+        Returns:
+            Дата в формате ISO 8601 с timezone UTC
+        """
+        # Если дата уже с timezone (содержит Z или +/-, пропускаем)
+        if (
+            "Z" in dt_str
+            or ("+" in dt_str and ":" in dt_str.split("+")[-1])
+            or ("-" in dt_str and len(dt_str.split("-")) > 3)
+        ):
+            # Проверяем, есть ли timezone в конце (формат +HH:MM или -HH:MM)
+            parts = dt_str.split("T")
+            if len(parts) > 1 and ("+" in parts[1] or parts[1].count("-") > 1):
+                # Уже есть timezone
+                return dt_str
+
+        # Парсим дату без timezone
+        try:
+            dt = datetime.fromisoformat(dt_str.replace("Z", ""))
+            # Если дата без timezone, считаем её в часовом поясе пользователя
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=user_tz)
+            # Конвертируем в UTC
+            dt_utc = dt.astimezone(UTC)
+            # Возвращаем в формате ISO 8601 с Z
+            return dt_utc.isoformat().replace("+00:00", "Z")
+        except (ValueError, AttributeError):
+            # Если не удалось распарсить, возвращаем как есть
+            return dt_str
 
 
 class GetTaskCommand(TasksCommand):

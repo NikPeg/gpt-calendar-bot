@@ -2,7 +2,7 @@
 Сервис для работы с Google Tasks API.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from googleapiclient.errors import HttpError
@@ -240,6 +240,24 @@ class TasksService(GoogleServiceBase):
             if due_min or due_max:
                 filtered_tasks = []
 
+                def parse_datetime(dt_str: str) -> datetime:
+                    """
+                    Парсит дату в формате ISO 8601/RFC3339 и возвращает offset-aware datetime в UTC.
+                    """
+                    # Убираем Z и заменяем на +00:00 для корректного парсинга
+                    if dt_str.endswith("Z"):
+                        dt_str = dt_str.replace("Z", "+00:00")
+
+                    # Парсим дату
+                    dt = datetime.fromisoformat(dt_str)
+
+                    # Если дата без timezone, считаем её UTC
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=UTC)
+
+                    # Приводим к UTC для консистентности
+                    return dt.astimezone(UTC)
+
                 for task in tasks:
                     task_due = task.get("due")
                     if not task_due:
@@ -248,23 +266,16 @@ class TasksService(GoogleServiceBase):
 
                     # Парсим дату дедлайна задачи
                     try:
-                        # Google Tasks возвращает дату в формате RFC3339
-                        task_due_dt = datetime.fromisoformat(
-                            task_due.replace("Z", "+00:00")
-                        )
+                        task_due_dt = parse_datetime(task_due)
 
                         # Проверяем фильтры
                         if due_min:
-                            min_dt = datetime.fromisoformat(
-                                due_min.replace("Z", "+00:00")
-                            )
+                            min_dt = parse_datetime(due_min)
                             if task_due_dt < min_dt:
                                 continue
 
                         if due_max:
-                            max_dt = datetime.fromisoformat(
-                                due_max.replace("Z", "+00:00")
-                            )
+                            max_dt = parse_datetime(due_max)
                             if task_due_dt > max_dt:
                                 continue
 

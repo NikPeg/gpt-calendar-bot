@@ -277,6 +277,11 @@ async def _process_llm_response(
                     function_name, function_args, chat_id
                 )
 
+            # Логируем результат функции для отладки
+            logger.info(
+                f"LLM{chat_id}: Function {function_name} returned result: {result[:500] if len(result) > 500 else result}"
+            )
+
             function_results.append(
                 {
                     "role": "tool",

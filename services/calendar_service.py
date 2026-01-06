@@ -2,6 +2,7 @@
 Сервис для работы с Google Calendar API.
 """
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -336,6 +337,11 @@ class CalendarService(GoogleServiceBase):
 
             # Получаем события
             events_result = self.service.events().list(**params).execute()
+            # Логируем сырой ответ от Google API
+            logger.debug(
+                f"GOOGLE_API: Raw response from calendar '{calendar_id}': "
+                f"{json.dumps(events_result, ensure_ascii=False, default=str)[:1000]}"
+            )
             events = events_result.get("items", [])
             logger.info(f"GOOGLE_API: ✅ Found {len(events)} events")
             return events
@@ -388,6 +394,11 @@ class CalendarService(GoogleServiceBase):
 
             # Получаем события
             events_result = self.service.events().list(**params).execute()
+            # Логируем сырой ответ от Google API
+            logger.debug(
+                f"GOOGLE_API: Raw response from calendar '{calendar_id}': "
+                f"{json.dumps(events_result, ensure_ascii=False, default=str)[:1000]}"
+            )
             events = events_result.get("items", [])
 
             # Помечаем источник календаря для каждого события

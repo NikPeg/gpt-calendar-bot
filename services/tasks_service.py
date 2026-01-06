@@ -2,6 +2,7 @@
 Сервис для работы с Google Tasks API.
 """
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -234,6 +235,11 @@ class TasksService(GoogleServiceBase):
 
             # Получаем задачи
             results = self.service.tasks().list(**params).execute()
+            # Логируем сырой ответ от Google API
+            logger.debug(
+                f"GOOGLE_API: Raw response from tasklist '{tasklist_id}': "
+                f"{json.dumps(results, ensure_ascii=False, default=str)[:1000]}"
+            )
             tasks = results.get("items", [])
 
             # Фильтруем по дате дедлайна, если указаны параметры

@@ -43,6 +43,11 @@ class TestRecurrenceRule:
         result = CreateEventCommand._parse_recurrence_rule("monthly")
         assert result == ["RRULE:FREQ=MONTHLY;INTERVAL=1"]
 
+    def test_daily_recurrence(self):
+        """Тест ежедневного повторения."""
+        result = CreateEventCommand._parse_recurrence_rule("daily")
+        assert result == ["RRULE:FREQ=DAILY;INTERVAL=1"]
+
     def test_case_insensitive(self):
         """Тест регистронезависимости."""
         assert CreateEventCommand._parse_recurrence_rule("WEEKLY") == [
@@ -57,6 +62,9 @@ class TestRecurrenceRule:
         assert CreateEventCommand._parse_recurrence_rule("MONTHLY") == [
             "RRULE:FREQ=MONTHLY;INTERVAL=1"
         ]
+        assert CreateEventCommand._parse_recurrence_rule("DAILY") == [
+            "RRULE:FREQ=DAILY;INTERVAL=1"
+        ]
 
     def test_with_whitespace(self):
         """Тест обработки пробелов."""
@@ -66,10 +74,13 @@ class TestRecurrenceRule:
         assert CreateEventCommand._parse_recurrence_rule(" biweekly ") == [
             "RRULE:FREQ=WEEKLY;INTERVAL=2"
         ]
+        assert CreateEventCommand._parse_recurrence_rule("  daily  ") == [
+            "RRULE:FREQ=DAILY;INTERVAL=1"
+        ]
 
     def test_unknown_rule(self):
         """Тест неизвестного правила."""
-        result = CreateEventCommand._parse_recurrence_rule("daily")
+        result = CreateEventCommand._parse_recurrence_rule("yearly")
         assert result is None
 
     def test_empty_string(self):

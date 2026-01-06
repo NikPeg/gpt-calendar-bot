@@ -2,6 +2,7 @@
 Сервис для работы с Google Tasks API.
 """
 
+from datetime import datetime
 from typing import Any
 
 from googleapiclient.errors import HttpError
@@ -183,6 +184,8 @@ class TasksService(GoogleServiceBase):
         max_results: int = 10,
         show_completed: bool = False,
         show_hidden: bool = False,
+        due_min: str | None = None,
+        due_max: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Получает список задач из указанного списка.
@@ -192,6 +195,8 @@ class TasksService(GoogleServiceBase):
             max_results: Максимальное количество задач
             show_completed: Показывать ли выполненные задачи
             show_hidden: Показывать ли скрытые задачи
+            due_min: Минимальная дата дедлайна для фильтрации (RFC3339)
+            due_max: Максимальная дата дедлайна для фильтрации (RFC3339)
 
         Returns:
             Список задач
@@ -223,12 +228,55 @@ class TasksService(GoogleServiceBase):
             # Логируем вызов API
             logger.info(
                 f"GOOGLE_API: Listing tasks from tasklist '{tasklist_id}': "
-                f"max_results={max_results}, show_completed={show_completed}"
+                f"max_results={max_results}, show_completed={show_completed}, "
+                f"due_min={due_min}, due_max={due_max}"
             )
 
             # Получаем задачи
             results = self.service.tasks().list(**params).execute()
             tasks = results.get("items", [])
+
+            # Фильтруем по дате дедлайна, если указаны параметры
+            if due_min or due_max:
+                filtered_tasks = []
+
+                for task in tasks:
+                    task_due = task.get("due")
+                    if not task_due:
+                        # Если у задачи нет дедлайна, пропускаем её при фильтрации
+                        continue
+
+                    # Парсим дату дедлайна задачи
+                    try:
+                        # Google Tasks возвращает дату в формате RFC3339
+                        task_due_dt = datetime.fromisoformat(
+                            task_due.replace("Z", "+00:00")
+                        )
+
+                        # Проверяем фильтры
+                        if due_min:
+                            min_dt = datetime.fromisoformat(
+                                due_min.replace("Z", "+00:00")
+                            )
+                            if task_due_dt < min_dt:
+                                continue
+
+                        if due_max:
+                            max_dt = datetime.fromisoformat(
+                                due_max.replace("Z", "+00:00")
+                            )
+                            if task_due_dt > max_dt:
+                                continue
+
+                        filtered_tasks.append(task)
+                    except (ValueError, AttributeError) as e:
+                        logger.warning(
+                            f"GOOGLE_API: Could not parse task due date '{task_due}': {e}"
+                        )
+                        continue
+
+                tasks = filtered_tasks
+
             logger.info(f"GOOGLE_API: ✅ Found {len(tasks)} tasks")
             return tasks
         except HttpError as e:

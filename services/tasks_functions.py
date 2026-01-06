@@ -49,6 +49,14 @@ TASKS_FUNCTIONS = [
                     "type": "boolean",
                     "description": "Показывать ли выполненные задачи (по умолчанию False)",
                 },
+                "due_min": {
+                    "type": "string",
+                    "description": "Минимальная дата дедлайна для фильтрации задач в формате ISO 8601 (YYYY-MM-DDTHH:MM:SSZ) (опционально). Используй для фильтрации задач на сегодня или в определенном диапазоне дат",
+                },
+                "due_max": {
+                    "type": "string",
+                    "description": "Максимальная дата дедлайна для фильтрации задач в формате ISO 8601 (YYYY-MM-DDTHH:MM:SSZ) (опционально). Используй для фильтрации задач на сегодня или в определенном диапазоне дат",
+                },
             },
             "required": [],
         },
@@ -250,11 +258,15 @@ class ListTasksCommand(TasksCommand):
     async def execute(self) -> str:
         max_results = self.arguments.get("max_results", 10)
         show_completed = self.arguments.get("show_completed", False)
+        due_min = self.arguments.get("due_min")
+        due_max = self.arguments.get("due_max")
 
         # Получаем задачи
         tasks = self.context.tasks_service.list_tasks(
             max_results=max_results,
             show_completed=show_completed,
+            due_min=due_min,
+            due_max=due_max,
         )
 
         if not tasks:

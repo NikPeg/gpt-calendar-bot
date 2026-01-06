@@ -444,6 +444,20 @@ class CreateEventCommand(CalendarCommand):
         )
 
         if event:
+            # Проверяем наличие ошибки недостаточных прав
+            if event.get("_error") == "insufficient_permissions":
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": (
+                            "❌ Недостаточно прав доступа к календарю.\n\n"
+                            "Для работы с календарем необходимо переавторизоваться с полными правами доступа.\n\n"
+                            "Пожалуйста, выполните команду /start и пройдите авторизацию заново."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+            
             event_id = event.get("id", "")
             start = event.get("start", {}).get("dateTime", "")
 
@@ -517,6 +531,23 @@ class ListEventsCommand(CalendarCommand):
             time_max=time_max,
         )
 
+        # Проверяем наличие ошибки недостаточных прав доступа
+        has_permission_error = False
+        if events:
+            # Ищем маркер ошибки в конце списка
+            for event in events:
+                if isinstance(event, dict) and event.get("_error") == "insufficient_permissions":
+                    has_permission_error = True
+                    events.remove(event)
+                    break
+
+        if has_permission_error:
+            return (
+                "❌ Недостаточно прав доступа к календарю.\n\n"
+                "Для работы с календарем необходимо переавторизоваться с полными правами доступа.\n\n"
+                "Пожалуйста, выполните команду /start и пройдите авторизацию заново."
+            )
+
         if not events:
             return "📅 Событий не найдено"
 
@@ -559,6 +590,14 @@ class GetEventCommand(CalendarCommand):
 
         if not event:
             return f"❌ Событие с ID {event_id} не найдено"
+
+        # Проверяем наличие ошибки недостаточных прав
+        if event.get("_error") == "insufficient_permissions":
+            return (
+                "❌ Недостаточно прав доступа к календарю.\n\n"
+                "Для работы с календарем необходимо переавторизоваться с полными правами доступа.\n\n"
+                "Пожалуйста, выполните команду /start и пройдите авторизацию заново."
+            )
 
         return self._format_event_details(event, event_id)
 
@@ -616,6 +655,20 @@ class UpdateEventCommand(CalendarCommand):
         )
 
         if event:
+            # Проверяем наличие ошибки недостаточных прав
+            if event.get("_error") == "insufficient_permissions":
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": (
+                            "❌ Недостаточно прав доступа к календарю.\n\n"
+                            "Для работы с календарем необходимо переавторизоваться с полными правами доступа.\n\n"
+                            "Пожалуйста, выполните команду /start и пройдите авторизацию заново."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+            
             return json.dumps(
                 {
                     "status": "success",
@@ -649,6 +702,20 @@ class DeleteEventCommand(CalendarCommand):
         success = self.context.calendar_service.delete_event(
             self.context.primary_calendar_id, event_id
         )
+
+        # Проверяем наличие ошибки недостаточных прав (None вместо False)
+        if success is None:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": (
+                        "❌ Недостаточно прав доступа к календарю.\n\n"
+                        "Для работы с календарем необходимо переавторизоваться с полными правами доступа.\n\n"
+                        "Пожалуйста, выполните команду /start и пройдите авторизацию заново."
+                    ),
+                },
+                ensure_ascii=False,
+            )
 
         if success:
             return json.dumps(

@@ -21,6 +21,26 @@ class CalendarService(GoogleServiceBase):
         "https://www.googleapis.com/auth/tasks",
     ]
 
+    @staticmethod
+    def _is_insufficient_permissions_error(e: HttpError) -> bool:
+        """
+        Проверяет, является ли ошибка ошибкой недостаточных прав доступа.
+
+        Args:
+            e: HttpError от Google API
+
+        Returns:
+            True если это ошибка недостаточных прав (403)
+        """
+        if e.resp.status != 403:
+            return False
+        
+        error_details = e.error_details if hasattr(e, "error_details") else []
+        for detail in error_details:
+            if detail.get("reason") == "insufficientPermissions":
+                return True
+        return False
+
     def __init__(
         self,
         access_token: str | None = None,
@@ -246,6 +266,12 @@ class CalendarService(GoogleServiceBase):
             logger.info(f"GOOGLE_API: ✅ Event created successfully: id={event_id}")
             return created_event
         except HttpError as e:
+            if self._is_insufficient_permissions_error(e):
+                logger.error(
+                    f"GOOGLE_API: ❌ Insufficient permissions creating event: {e}"
+                )
+                # Возвращаем специальный маркер ошибки
+                return {"_error": "insufficient_permissions"}
             logger.error(f"GOOGLE_API: ❌ HTTP Error creating event: {e}")
             return None
         except Exception as e:
@@ -370,6 +396,15 @@ class CalendarService(GoogleServiceBase):
 
             return events
         except HttpError as e:
+            # Проверяем ошибку недостаточных прав доступа
+            if self._is_insufficient_permissions_error(e):
+                logger.error(
+                    f"Error listing events from calendar {calendar_id}: "
+                    f"Insufficient permissions (403). User needs to re-authorize with Calendar scope."
+                )
+                # Возвращаем специальный маркер ошибки
+                return [{"_error": "insufficient_permissions", "_calendar_id": calendar_id}]
+            
             logger.error(f"Error listing events from calendar {calendar_id}: {e}")
             return []
         except Exception as e:
@@ -401,6 +436,7 @@ class CalendarService(GoogleServiceBase):
             return []
 
         all_events = []
+        has_permission_error = False
 
         # Получаем события из каждого календаря
         for calendar_id in calendar_ids:
@@ -410,6 +446,14 @@ class CalendarService(GoogleServiceBase):
                 time_min=time_min,
                 time_max=time_max,
             )
+            
+            # Проверяем наличие ошибки недостаточных прав
+            if events and isinstance(events, list) and len(events) > 0:
+                if isinstance(events[0], dict) and events[0].get("_error") == "insufficient_permissions":
+                    has_permission_error = True
+                    # Убираем маркер ошибки из списка
+                    continue
+            
             all_events.extend(events)
 
         # Сортируем все события по времени начала
@@ -419,7 +463,13 @@ class CalendarService(GoogleServiceBase):
         )
 
         # Ограничиваем количество
-        return all_events[:max_results]
+        result = all_events[:max_results]
+        
+        # Добавляем маркер ошибки, если была ошибка прав доступа
+        if has_permission_error:
+            result.append({"_error": "insufficient_permissions"})
+        
+        return result
 
     def get_event(self, user_email: str, event_id: str) -> dict[str, Any] | None:
         """
@@ -521,6 +571,11 @@ class CalendarService(GoogleServiceBase):
             logger.info(f"GOOGLE_API: ✅ Event updated successfully: id={event_id}")
             return updated_event
         except HttpError as e:
+            if self._is_insufficient_permissions_error(e):
+                logger.error(
+                    f"GOOGLE_API: ❌ Insufficient permissions updating event {event_id}: {e}"
+                )
+                return {"_error": "insufficient_permissions"}
             logger.error(f"GOOGLE_API: ❌ HTTP Error updating event {event_id}: {e}")
             return None
         except Exception as e:
@@ -562,6 +617,12 @@ class CalendarService(GoogleServiceBase):
             logger.info(f"GOOGLE_API: ✅ Event deleted successfully: id={event_id}")
             return True
         except HttpError as e:
+            if self._is_insufficient_permissions_error(e):
+                logger.error(
+                    f"GOOGLE_API: ❌ Insufficient permissions deleting event {event_id}: {e}"
+                )
+                # Возвращаем специальное значение для ошибки прав
+                return None  # None вместо False для отличия от обычной ошибки
             logger.error(f"GOOGLE_API: ❌ HTTP Error deleting event {event_id}: {e}")
             return False
         except Exception as e:

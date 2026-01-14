@@ -70,15 +70,6 @@ async def test_db():
     if os.path.exists(test_db_name):
         os.remove(test_db_name)
 
-    # Очищаем импортированные модули, чтобы не влиять на другие тесты
-    modules_to_clean = [
-        "services.daily_digest_service",
-        "core.bot_instance",
-    ]
-    for module_name in modules_to_clean:
-        if module_name in sys.modules:
-            del sys.modules[module_name]
-
 
 @pytest.mark.asyncio
 async def test_daily_digest_default_values(test_db):

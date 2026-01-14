@@ -8,8 +8,6 @@ from unittest.mock import patch
 
 import pytest
 
-from services.llm_service import _process_llm_response
-
 
 @pytest.mark.asyncio
 async def test_function_chaining_delete_event():
@@ -17,6 +15,9 @@ async def test_function_chaining_delete_event():
     Тест цепочки вызовов: list_calendar_events -> delete_calendar_event.
     Симулирует удаление события "Обед" с правильным получением ID.
     """
+    # Импортируем локально, чтобы не влиять на другие тесты
+    from services.llm_service import _process_llm_response
+
     chat_id = 123456
     prompt = []
     functions = [
@@ -132,6 +133,9 @@ async def test_function_chaining_max_iterations():
     """
     Тест проверяет, что цепочка вызовов ограничена max_iterations.
     """
+    # Импортируем локально, чтобы не влиять на другие тесты
+    from services.llm_service import _process_llm_response
+
     chat_id = 123456
     prompt = []
     functions = [{"name": "test_function", "description": "Test"}]
@@ -182,6 +186,9 @@ async def test_function_chaining_no_tool_calls():
     Тест проверяет, что если LLM возвращает обычный ответ без tool_calls,
     цепочка прерывается корректно.
     """
+    # Импортируем локально, чтобы не влиять на другие тесты
+    from services.llm_service import _process_llm_response
+
     chat_id = 123456
     prompt = []
     functions = [{"name": "test_function", "description": "Test"}]
@@ -234,6 +241,9 @@ async def test_function_chaining_triple_call():
     """
     Тест проверяет цепочку из 3 вызовов функций подряд.
     """
+    # Импортируем локально, чтобы не влиять на другие тесты
+    from services.llm_service import _process_llm_response
+
     chat_id = 123456
     prompt = []
     functions = [

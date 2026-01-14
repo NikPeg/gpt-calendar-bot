@@ -24,57 +24,49 @@ async def test_markdown_debug_to_admin_chat():
     2. Оригинальный текст (до исправлений)
     3. Текст после всех исправлений
     """
-    # Импортируем модули с моками
     from unittest.mock import patch
 
-    with patch.dict(
-        "sys.modules",
-        {"core.config": MagicMock(), "core.bot_instance": MagicMock()},
+    # Импортируем utils
+    from core import utils
+
+    # Настраиваем ADMIN_CHAT
+    test_admin_chat = 123456
+
+    # Создаем мок бота
+    mock_bot = AsyncMock()
+
+    # Счетчик вызовов send_message
+    send_message_calls = []
+
+    # Функция, имитирующая ошибку при отправке с markdown
+    async def mock_send_message(chat_id, text, parse_mode=None, **kwargs):
+        call_info = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": parse_mode,
+        }
+        send_message_calls.append(call_info)
+
+        # Если это попытка отправить с markdown в обычный чат
+        if parse_mode == ParseMode.MARKDOWN_V2 and chat_id != test_admin_chat:
+            raise TelegramBadRequest(
+                method="sendMessage",
+                message="Can't parse entities: Can't find end of the entity starting at byte offset 42",
+            )
+
+        # Для админского чата или без parse_mode - успешно
+        return MagicMock(message_id=999)
+
+    mock_bot.send_message = mock_send_message
+
+    # Текст с проблемным markdown
+    test_text = "Тест *жирный _курсив* неправильно_"
+    test_chat_id = 7554526253
+
+    # Патчим bot и ADMIN_CHAT в модуле utils
+    with patch.object(utils, "bot", mock_bot), patch.object(
+        utils, "ADMIN_CHAT", test_admin_chat
     ):
-        # Настраиваем моки
-        mock_config = sys.modules["core.config"]
-        mock_config.ADMIN_CHAT = 123456
-        mock_config.MESSAGES_LEVEL = 20
-        mock_config.logger = MagicMock()
-
-        # Импортируем utils после настройки моков
-        from core import utils
-
-        # Создаем мок бота
-        mock_bot = AsyncMock()
-        utils.bot = mock_bot
-
-        # Счетчик вызовов send_message
-        send_message_calls = []
-
-        # Функция, имитирующая ошибку при отправке с markdown
-        async def mock_send_message(chat_id, text, parse_mode=None, **kwargs):
-            call_info = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": parse_mode,
-            }
-            send_message_calls.append(call_info)
-
-            # Если это попытка отправить с markdown в обычный чат
-            if (
-                parse_mode == ParseMode.MARKDOWN_V2
-                and chat_id != mock_config.ADMIN_CHAT
-            ):
-                raise TelegramBadRequest(
-                    method="sendMessage",
-                    message="Can't parse entities: Can't find end of the entity starting at byte offset 42",
-                )
-
-            # Для админского чата или без parse_mode - успешно
-            return MagicMock(message_id=999)
-
-        mock_bot.send_message = mock_send_message
-
-        # Текст с проблемным markdown
-        test_text = "Тест *жирный _курсив* неправильно_"
-        test_chat_id = 7554526253
-
         # Отправляем сообщение
         result = await utils.send_message_with_fallback(
             chat_id=test_chat_id, text=test_text
@@ -85,9 +77,7 @@ async def test_markdown_debug_to_admin_chat():
 
         # Проверяем, что были вызовы к админскому чату
         admin_calls = [
-            call
-            for call in send_message_calls
-            if call["chat_id"] == mock_config.ADMIN_CHAT
+            call for call in send_message_calls if call["chat_id"] == test_admin_chat
         ]
 
         # Должно быть минимум 3 сообщения в админский чат
@@ -128,33 +118,28 @@ async def test_no_debug_messages_on_success():
     """
     from unittest.mock import patch
 
-    with patch.dict(
-        "sys.modules",
-        {"core.config": MagicMock(), "core.bot_instance": MagicMock()},
+    from core import utils
+
+    test_admin_chat = 777777
+    mock_bot = AsyncMock()
+
+    send_message_calls = []
+
+    async def mock_send_message(chat_id, text, parse_mode=None, **kwargs):
+        call_info = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
+        send_message_calls.append(call_info)
+        # Всегда успешно
+        return MagicMock(message_id=555)
+
+    mock_bot.send_message = mock_send_message
+
+    test_text = "Обычный текст без проблем"
+    test_chat_id = 9876543
+
+    # Патчим bot и ADMIN_CHAT в модуле utils
+    with patch.object(utils, "bot", mock_bot), patch.object(
+        utils, "ADMIN_CHAT", test_admin_chat
     ):
-        mock_config = sys.modules["core.config"]
-        mock_config.ADMIN_CHAT = 777777
-        mock_config.MESSAGES_LEVEL = 20
-        mock_config.logger = MagicMock()
-
-        from core import utils
-
-        mock_bot = AsyncMock()
-        utils.bot = mock_bot
-
-        send_message_calls = []
-
-        async def mock_send_message(chat_id, text, parse_mode=None, **kwargs):
-            call_info = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
-            send_message_calls.append(call_info)
-            # Всегда успешно
-            return MagicMock(message_id=555)
-
-        mock_bot.send_message = mock_send_message
-
-        test_text = "Обычный текст без проблем"
-        test_chat_id = 9876543
-
         result = await utils.send_message_with_fallback(
             chat_id=test_chat_id, text=test_text
         )
@@ -163,9 +148,7 @@ async def test_no_debug_messages_on_success():
 
         # Проверяем, что в админский чат НИЧЕГО не отправлено
         admin_calls = [
-            call
-            for call in send_message_calls
-            if call["chat_id"] == mock_config.ADMIN_CHAT
+            call for call in send_message_calls if call["chat_id"] == test_admin_chat
         ]
 
         assert len(admin_calls) == 0, "No debug messages should be sent on success"

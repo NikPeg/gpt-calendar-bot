@@ -125,7 +125,7 @@ class Conversation:
                 self.active_messages_count,
                 self.subscription_verified,
                 self.referral_code,
-                self.timezone_offset,
+                self.timezone_offset if self.timezone_offset is not None else 3,
                 self.user_email,
                 self.oauth_access_token,
                 self.oauth_refresh_token,

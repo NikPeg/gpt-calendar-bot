@@ -64,8 +64,9 @@ async def test_markdown_debug_to_admin_chat():
     test_chat_id = 7554526253
 
     # Патчим bot и ADMIN_CHAT в модуле utils
-    with patch.object(utils, "bot", mock_bot), patch.object(
-        utils, "ADMIN_CHAT", test_admin_chat
+    with (
+        patch.object(utils, "bot", mock_bot),
+        patch.object(utils, "ADMIN_CHAT", test_admin_chat),
     ):
         # Отправляем сообщение
         result = await utils.send_message_with_fallback(
@@ -137,8 +138,9 @@ async def test_no_debug_messages_on_success():
     test_chat_id = 9876543
 
     # Патчим bot и ADMIN_CHAT в модуле utils
-    with patch.object(utils, "bot", mock_bot), patch.object(
-        utils, "ADMIN_CHAT", test_admin_chat
+    with (
+        patch.object(utils, "bot", mock_bot),
+        patch.object(utils, "ADMIN_CHAT", test_admin_chat),
     ):
         result = await utils.send_message_with_fallback(
             chat_id=test_chat_id, text=test_text

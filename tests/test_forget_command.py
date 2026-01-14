@@ -38,7 +38,9 @@ async def test_db():
                 user_email TEXT DEFAULT NULL,
                 oauth_access_token TEXT DEFAULT NULL,
                 oauth_refresh_token TEXT DEFAULT NULL,
-                oauth_token_expiry TEXT DEFAULT NULL
+                oauth_token_expiry TEXT DEFAULT NULL,
+                daily_digest_enabled INTEGER DEFAULT 1,
+                daily_digest_hour INTEGER DEFAULT 9
             )
         """)
 

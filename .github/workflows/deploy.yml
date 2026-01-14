@@ -521,6 +521,10 @@ jobs:
 
       - name: Send notification
         run: |
+          echo "=========================================="
+          echo "📊 Статусы jobs:"
+          echo "=========================================="
+          
           COMMIT_MSG=$(git log -1 --pretty=format:"%s")
           COMMIT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -529,6 +533,12 @@ jobs:
           TEST_STATUS="${{ needs.test.result }}"
           BUILD_STATUS="${{ needs.build-and-push.result }}"
           DEPLOY_STATUS="${{ needs.deploy.result }}"
+          
+          echo "Test:         $TEST_STATUS"
+          echo "Build:        $BUILD_STATUS"
+          echo "Deploy:       $DEPLOY_STATUS"
+          echo "Commit:       $COMMIT_SHA - $COMMIT_MSG"
+          echo "=========================================="
           
           # Функция для форматирования статуса
           format_status() {
@@ -554,36 +564,86 @@ jobs:
           }
           
           # Формируем сообщение
-          # Проверяем, все ли jobs успешны (учитываем, что skipped/null не считается успехом)
+          # Проверяем, все ли jobs успешны
           ALL_SUCCESS=true
-          if [ "$TEST_STATUS" != "success" ] || [ -z "$TEST_STATUS" ]; then
+          if [ "$TEST_STATUS" != "success" ]; then
             ALL_SUCCESS=false
+            echo "⚠️  Test job не успешен: $TEST_STATUS"
           fi
-          if [ "$BUILD_STATUS" != "success" ] || [ -z "$BUILD_STATUS" ]; then
+          if [ "$BUILD_STATUS" != "success" ]; then
             ALL_SUCCESS=false
+            echo "⚠️  Build job не успешен: $BUILD_STATUS"
           fi
-          if [ "$DEPLOY_STATUS" != "success" ] || [ -z "$DEPLOY_STATUS" ]; then
+          if [ "$DEPLOY_STATUS" != "success" ]; then
             ALL_SUCCESS=false
+            echo "⚠️  Deploy job не успешен: $DEPLOY_STATUS"
           fi
           
           if [ "$ALL_SUCCESS" = "true" ]; then
             EMOJI="✅"
             TITLE="<b>Деплой успешно завершен!</b>"
             STATUS_TEXT="Все этапы пройдены успешно"
+            echo "✅ Все jobs успешны"
           else
             EMOJI="❌"
             TITLE="<b>Деплой завершился с ошибкой!</b>"
             STATUS_TEXT=""
             
-            STATUS_TEXT="${STATUS_TEXT}$(format_status "${TEST_STATUS:-skipped}" "Тесты/Линтер")%0A"
-            STATUS_TEXT="${STATUS_TEXT}$(format_status "${BUILD_STATUS:-skipped}" "Сборка")%0A"
-            STATUS_TEXT="${STATUS_TEXT}$(format_status "${DEPLOY_STATUS:-skipped}" "Деплой")%0A"
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${TEST_STATUS}" "Тесты/Линтер")%0A"
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${BUILD_STATUS}" "Сборка")%0A"
+            STATUS_TEXT="${STATUS_TEXT}$(format_status "${DEPLOY_STATUS}" "Деплой")%0A"
+            echo "❌ Workflow завершился с ошибками"
           fi
           
           MESSAGE="${EMOJI} ${TITLE}%0A%0ACommit: <code>${COMMIT_SHA}</code>%0A${COMMIT_MSG}%0A%0A${STATUS_TEXT}%0A<a href='${WORKFLOW_URL}'>Проверить в Actions</a>"
           
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TG_TOKEN }}/sendMessage" \
+          echo "=========================================="
+          echo "📤 Отправка уведомления в Telegram..."
+          echo "Chat ID: ${{ secrets.ADMIN_CHAT }}"
+          echo "=========================================="
+          
+          # Отправляем уведомление и сохраняем ответ
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.telegram.org/bot${{ secrets.TG_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.ADMIN_CHAT }}" \
             -d "parse_mode=HTML" \
-            -d "text=${MESSAGE}"
+            -d "text=${MESSAGE}")
+          
+          # Разделяем ответ на тело и HTTP код
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          echo "HTTP код: $HTTP_CODE"
+          echo "Ответ API: $RESPONSE_BODY"
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "=========================================="
+            echo "❌ ОШИБКА: Не удалось отправить уведомление в Telegram"
+            echo "HTTP код: $HTTP_CODE"
+            echo "Ответ: $RESPONSE_BODY"
+            echo "=========================================="
+            echo ""
+            echo "Возможные причины:"
+            echo "1. Неверный TG_TOKEN"
+            echo "2. Неверный ADMIN_CHAT (для групп должен начинаться с -)"
+            echo "3. Бот не добавлен в чат"
+            echo "4. У бота нет прав на отправку сообщений"
+            echo "=========================================="
+            exit 1
+          fi
+          
+          echo "✅ Уведомление успешно отправлено"
+          
+          # ВАЖНО: Завершаем job с ошибкой если workflow провалился
+          # Это обеспечит красный крестик в GitHub Actions
+          if [ "$ALL_SUCCESS" != "true" ]; then
+            echo "=========================================="
+            echo "❌ Workflow завершился с ошибкой"
+            echo "Завершаем notify job с кодом ошибки"
+            echo "=========================================="
+            exit 1
+          fi
+          
+          echo "=========================================="
+          echo "✅ Workflow выполнен успешно"
+          echo "=========================================="
 

@@ -26,9 +26,9 @@ async def test_existing_users_have_timezone():
         await cursor.close()
 
     # У всех пользователей должен быть установлен timezone_offset
-    assert (
-        users_without_timezone == 0
-    ), f"Найдено {users_without_timezone} пользователей без timezone_offset"
+    assert users_without_timezone == 0, (
+        f"Найдено {users_without_timezone} пользователей без timezone_offset"
+    )
 
 
 @pytest.mark.asyncio
@@ -55,17 +55,17 @@ async def test_new_user_has_default_timezone():
         await conversation_from_db.get_from_db()
 
         # Проверяем, что timezone_offset установлен в 3 по умолчанию
-        assert (
-            conversation_from_db.timezone_offset == 3
-        ), f"Expected timezone_offset=3, got {conversation_from_db.timezone_offset}"
+        assert conversation_from_db.timezone_offset == 3, (
+            f"Expected timezone_offset=3, got {conversation_from_db.timezone_offset}"
+        )
 
         # Проверяем, что другие поля по умолчанию тоже установлены правильно
-        assert (
-            conversation_from_db.daily_digest_enabled == 1
-        ), "Expected daily_digest_enabled=1"
-        assert (
-            conversation_from_db.daily_digest_hour == 9
-        ), "Expected daily_digest_hour=9"
+        assert conversation_from_db.daily_digest_enabled == 1, (
+            "Expected daily_digest_enabled=1"
+        )
+        assert conversation_from_db.daily_digest_hour == 9, (
+            "Expected daily_digest_hour=9"
+        )
 
     finally:
         # Удаляем тестового пользователя
@@ -104,9 +104,9 @@ async def test_user_can_override_default_timezone():
         # Читаем снова и проверяем, что изменение сохранилось
         conversation_updated = Conversation(test_user_id)
         await conversation_updated.get_from_db()
-        assert (
-            conversation_updated.timezone_offset == 5
-        ), "Пользователь не может изменить timezone"
+        assert conversation_updated.timezone_offset == 5, (
+            "Пользователь не может изменить timezone"
+        )
 
     finally:
         # Удаляем тестового пользователя

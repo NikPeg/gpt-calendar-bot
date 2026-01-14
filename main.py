@@ -14,6 +14,7 @@ from core.config import ADMIN_CHAT, add_telegram_handler, logger
 from core.middlewares import SubscriptionMiddleware
 from migrations.migration_manager import run_migrations
 from oauth_server import start_oauth_server
+from services.daily_digest_service import send_daily_digest_to_all
 from services.subscription_service import subscription_check_loop
 
 # Импортируем все обработчики (чтобы они зарегистрировались)
@@ -48,10 +49,41 @@ async def set_bot_commands():
             command="week",
             description="📅 Показать события и задачи на эту неделю",
         ),
+        BotCommand(
+            command="digest_settings",
+            description="🔔 Настройки ежедневной рассылки",
+        ),
     ]
 
     await bot.set_my_commands(commands)
     logger.info("Команды бота установлены в меню Telegram")
+
+
+def setup_scheduler():
+    """
+    Настраивает и запускает планировщик для автоматических задач.
+
+    Настраивает ежедневную рассылку событий и задач, которая проверяется каждый час
+    и отправляется пользователям с учетом их часового пояса.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler = AsyncIOScheduler()
+
+    # Добавляем задачу проверки ежедневных рассылок (каждый час)
+    scheduler.add_job(
+        send_daily_digest_to_all,
+        trigger=CronTrigger(minute=0),  # В начале каждого часа
+        id="daily_digest_check",
+        replace_existing=True,
+        max_instances=1,  # Не запускать, если предыдущая проверка еще не завершена
+    )
+
+    scheduler.start()
+    logger.info("✅ Планировщик ежедневных рассылок запущен (проверка каждый час)")
+
+    return scheduler
 
 
 async def main():
@@ -70,6 +102,9 @@ async def main():
 
     # Добавляем Telegram handler после инициализации бота
     add_telegram_handler(logger, bot)
+
+    # Запускаем планировщик для ежедневных рассылок
+    scheduler = setup_scheduler()
 
     # Простые сообщения для docker logs (в консоль)
     print("=" * 50)
@@ -96,6 +131,10 @@ async def main():
         raise  # Пробрасываем ошибку дальше для перезапуска Docker'ом
     finally:
         print("Останавливаем бота...")
+
+        # Останавливаем планировщик
+        scheduler.shutdown(wait=False)
+        logger.info("Планировщик остановлен")
 
         # Отменяем фоновые задачи
         subscription_task.cancel()

@@ -16,3 +16,9 @@ class AdminDispatchAll(StatesGroup):
     """Состояния для массовой рассылки всем пользователям."""
 
     input_text = State()
+
+
+class DigestSettings(StatesGroup):
+    """Состояния для настройки ежедневной рассылки."""
+
+    waiting_for_hour = State()

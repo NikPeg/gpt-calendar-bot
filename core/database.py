@@ -42,6 +42,8 @@ class Conversation:
         oauth_access_token=None,
         oauth_refresh_token=None,
         oauth_token_expiry=None,
+        daily_digest_enabled=None,
+        daily_digest_hour=None,
     ):
         self.id = id
         self.name = name
@@ -53,14 +55,16 @@ class Conversation:
         self.oauth_access_token = oauth_access_token
         self.oauth_refresh_token = oauth_refresh_token
         self.oauth_token_expiry = oauth_token_expiry
+        self.daily_digest_enabled = daily_digest_enabled
+        self.daily_digest_hour = daily_digest_hour
 
     def __repr__(self):
-        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, timezone_offset={self.timezone_offset}, user_email={self.user_email}, oauth_tokens={'***' if self.oauth_access_token else None})"
+        return f"Conversation(id={self.id}, name={self.name}, active_messages_count={self.active_messages_count}, subscription_verified={self.subscription_verified}, referral_code={self.referral_code}, timezone_offset={self.timezone_offset}, user_email={self.user_email}, oauth_tokens={'***' if self.oauth_access_token else None}, daily_digest_enabled={self.daily_digest_enabled}, daily_digest_hour={self.daily_digest_hour})"
 
     async def get_from_db(self):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry, daily_digest_enabled, daily_digest_hour FROM conversations WHERE id = ?"
             await cursor.execute(sql, (self.id,))
             row = await cursor.fetchone()
             if row:
@@ -74,11 +78,13 @@ class Conversation:
                 self.oauth_access_token = row[7] if len(row) > 7 else None
                 self.oauth_refresh_token = row[8] if len(row) > 8 else None
                 self.oauth_token_expiry = row[9] if len(row) > 9 else None
+                self.daily_digest_enabled = row[10] if len(row) > 10 else None
+                self.daily_digest_hour = row[11] if len(row) > 11 else None
 
     async def __call__(self, user_id):
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
-            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry FROM conversations WHERE id = ?"
+            sql = "SELECT id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry, daily_digest_enabled, daily_digest_hour FROM conversations WHERE id = ?"
             await cursor.execute(sql, (user_id,))
             row = await cursor.fetchone()
             if row:
@@ -93,6 +99,8 @@ class Conversation:
                     oauth_access_token=row[7] if len(row) > 7 else None,
                     oauth_refresh_token=row[8] if len(row) > 8 else None,
                     oauth_token_expiry=row[9] if len(row) > 9 else None,
+                    daily_digest_enabled=row[10] if len(row) > 10 else None,
+                    daily_digest_hour=row[11] if len(row) > 11 else None,
                 )
             return None
 
@@ -108,8 +116,8 @@ class Conversation:
         async with aiosqlite.connect(DATABASE_NAME) as db:
             cursor = await db.cursor()
             sql_insert = """
-                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO conversations (id, name, active_messages_count, subscription_verified, referral_code, timezone_offset, user_email, oauth_access_token, oauth_refresh_token, oauth_token_expiry, daily_digest_enabled, daily_digest_hour)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
             values = (
                 self.id,
@@ -122,6 +130,10 @@ class Conversation:
                 self.oauth_access_token,
                 self.oauth_refresh_token,
                 self.oauth_token_expiry,
+                self.daily_digest_enabled
+                if self.daily_digest_enabled is not None
+                else 1,
+                self.daily_digest_hour if self.daily_digest_hour is not None else 9,
             )
             await cursor.execute(sql_insert, values)
             await db.commit()
@@ -214,7 +226,8 @@ class Conversation:
             sql_query = """
                 UPDATE conversations
                 SET name = ?, active_messages_count = ?, subscription_verified = ?, referral_code = ?, timezone_offset = ?,
-                    user_email = ?, oauth_access_token = ?, oauth_refresh_token = ?, oauth_token_expiry = ?
+                    user_email = ?, oauth_access_token = ?, oauth_refresh_token = ?, oauth_token_expiry = ?,
+                    daily_digest_enabled = ?, daily_digest_hour = ?
                 WHERE id = ?
             """
             values = (
@@ -227,6 +240,8 @@ class Conversation:
                 self.oauth_access_token,
                 self.oauth_refresh_token,
                 self.oauth_token_expiry,
+                self.daily_digest_enabled,
+                self.daily_digest_hour,
                 self.id,
             )
             await cursor.execute(sql_query, values)

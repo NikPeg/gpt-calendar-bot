@@ -5,7 +5,9 @@
 import asyncio
 
 from aiogram import F, types
+from aiogram.filters.callback_data import CallbackData
 from aiogram.filters.command import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -16,6 +18,7 @@ from core.bot_instance import bot, dp
 from core.config import ADMIN_CHAT, MESSAGES, REQUIRED_CHANNELS, logger
 from core.database import Conversation, delete_chat_data
 from core.filters import OldMessage, UserNotInDB
+from core.states import DigestSettings
 from core.utils import (
     forward_to_debug,
     keep_typing,
@@ -678,3 +681,194 @@ async def cmd_week(message: types.Message):
 
     finally:
         typing_task.cancel()
+
+
+# Callback data для настроек ежедневной рассылки
+class DigestSettingsCallback(CallbackData, prefix="digest"):
+    """Callback data для настроек ежедневной рассылки."""
+
+    action: str  # toggle, change_hour, back
+
+
+@dp.message(Command("digest_settings"))
+async def cmd_digest_settings(message: types.Message):
+    """
+    Команда /digest_settings - настройка ежедневной рассылки событий и задач.
+    """
+    user_id = message.chat.id
+
+    # Игнорируем сообщения из ADMIN_CHAT
+    if user_id == ADMIN_CHAT:
+        return
+
+    logger.info(f"USER{user_id}: команда /digest_settings")
+    await forward_to_debug(user_id, message.message_id)
+
+    # Получаем данные пользователя
+    conversation = Conversation(user_id)
+    await conversation.get_from_db()
+
+    # Проверяем, что у пользователя установлен часовой пояс
+    if conversation.timezone_offset is None:
+        await message.answer(
+            MESSAGES["msg_digest_timezone_not_set"],
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    # Проверяем, что у пользователя настроен OAuth
+    if not conversation.oauth_access_token:
+        await message.answer(
+            MESSAGES["msg_calendar_not_configured"],
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    # Формируем сообщение с текущими настройками
+    is_enabled = conversation.daily_digest_enabled != 0
+    status = "✅ Включена" if is_enabled else "🔕 Отключена"
+    hour = (
+        conversation.daily_digest_hour
+        if conversation.daily_digest_hour is not None
+        else 9
+    )
+
+    message_text = MESSAGES["msg_digest_settings_current"].format(
+        status=status, hour=hour
+    )
+
+    # Создаем клавиатуру с кнопками
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔔 Включить" if not is_enabled else "🔕 Отключить",
+                    callback_data=DigestSettingsCallback(action="toggle").pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⏰ Изменить время",
+                    callback_data=DigestSettingsCallback(action="change_hour").pack(),
+                )
+            ],
+        ]
+    )
+
+    await message.answer(message_text, reply_markup=keyboard)
+
+
+@dp.callback_query(DigestSettingsCallback.filter(F.action == "toggle"))
+async def digest_toggle_callback(
+    callback: types.CallbackQuery, callback_data: DigestSettingsCallback
+):
+    """Обработчик включения/выключения ежедневной рассылки."""
+    user_id = callback.message.chat.id
+
+    # Получаем данные пользователя
+    conversation = Conversation(user_id)
+    await conversation.get_from_db()
+
+    # Переключаем статус
+    is_enabled = conversation.daily_digest_enabled != 0
+    conversation.daily_digest_enabled = 0 if is_enabled else 1
+    await conversation.update_in_db()
+
+    # Отправляем уведомление
+    if conversation.daily_digest_enabled == 1:
+        response_text = MESSAGES["msg_digest_enabled"]
+    else:
+        response_text = MESSAGES["msg_digest_disabled"]
+
+    await callback.answer(response_text, show_alert=False)
+
+    # Обновляем сообщение с настройками
+    is_enabled = conversation.daily_digest_enabled != 0
+    status = "✅ Включена" if is_enabled else "🔕 Отключена"
+    hour = (
+        conversation.daily_digest_hour
+        if conversation.daily_digest_hour is not None
+        else 9
+    )
+
+    message_text = MESSAGES["msg_digest_settings_current"].format(
+        status=status, hour=hour
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔔 Включить" if not is_enabled else "🔕 Отключить",
+                    callback_data=DigestSettingsCallback(action="toggle").pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⏰ Изменить время",
+                    callback_data=DigestSettingsCallback(action="change_hour").pack(),
+                )
+            ],
+        ]
+    )
+
+    await callback.message.edit_text(message_text, reply_markup=keyboard)
+
+    logger.info(
+        f"USER{user_id}: ежедневная рассылка {'включена' if is_enabled else 'отключена'}"
+    )
+
+
+@dp.callback_query(DigestSettingsCallback.filter(F.action == "change_hour"))
+async def digest_change_hour_callback(
+    callback: types.CallbackQuery,
+    callback_data: DigestSettingsCallback,
+    state: FSMContext,
+):
+    """Обработчик начала изменения времени отправки."""
+    await callback.answer()
+
+    # Отправляем запрос на ввод часа
+    await callback.message.answer(
+        MESSAGES["msg_digest_enter_hour"], reply_markup=ReplyKeyboardRemove()
+    )
+
+    # Устанавливаем состояние ожидания ввода часа
+    await state.set_state(DigestSettings.waiting_for_hour)
+
+
+@dp.message(DigestSettings.waiting_for_hour)
+async def digest_hour_input(message: types.Message, state: FSMContext):
+    """Обработчик ввода часа для ежедневной рассылки."""
+    user_id = message.chat.id
+
+    try:
+        # Проверяем, что введено число
+        hour = int(message.text.strip())
+
+        # Проверяем диапазон
+        if hour < 0 or hour > 23:
+            await message.answer(MESSAGES["msg_digest_hour_invalid"])
+            return
+
+        # Получаем данные пользователя и обновляем час
+        conversation = Conversation(user_id)
+        await conversation.get_from_db()
+        conversation.daily_digest_hour = hour
+        await conversation.update_in_db()
+
+        # Отправляем подтверждение
+        await message.answer(
+            MESSAGES["msg_digest_hour_updated"].format(hour=hour),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+
+        logger.info(f"USER{user_id}: время ежедневной рассылки изменено на {hour}:00")
+
+    except ValueError:
+        await message.answer(MESSAGES["msg_digest_hour_invalid"])
+        return
+
+    finally:
+        # Очищаем состояние
+        await state.clear()
